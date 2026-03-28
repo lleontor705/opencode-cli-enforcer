@@ -64,6 +64,10 @@ describe("isRetryableError", () => {
     expect(isRetryableError({ message: "socket hang up" })).toBe(true)
   })
 
+  it("returns false for canceled errors", () => {
+    expect(isRetryableError({ canceled: true, message: "CLI was canceled" })).toBe(false)
+  })
+
   it("returns false for non-retryable errors", () => {
     expect(isRetryableError({ message: "Command not found" })).toBe(false)
     expect(isRetryableError({ message: "Permission denied" })).toBe(false)

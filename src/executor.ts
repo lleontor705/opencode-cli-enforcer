@@ -2,8 +2,11 @@
  * Core Execution Engine — runs a CLI binary via execa with structured output.
  */
 
-import { execaCommand } from "execa"
+import { execa } from "execa"
 import type { CliDef } from "./cli-defs"
+
+/** Prompts longer than this (chars) are delivered via stdin to avoid OS arg-length limits. */
+export const STDIN_THRESHOLD = 30_000
 
 export interface ExecResult {
   stdout: string
@@ -16,21 +19,26 @@ export async function executeCliOnce(
   prompt: string,
   mode: string,
   timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<ExecResult> {
-  const args = def.buildArgs(prompt, mode)
+  const useStdin = def.buildStdinArgs != null && prompt.length > STDIN_THRESHOLD
+  const args = useStdin ? def.buildStdinArgs!(mode) : def.buildArgs(prompt, mode)
   const start = Date.now()
 
-  const result = await execaCommand(
-    [def.binary, ...args.map((a) => (a.includes(" ") ? `"${a}"` : a))].join(" "),
-    {
-      timeout: timeoutMs,
-      maxBuffer: 10 * 1024 * 1024,
-      reject: false,
-      windowsHide: true,
-    },
-  )
+  const result = await execa(def.binary, args, {
+    timeout: timeoutMs,
+    maxBuffer: 10 * 1024 * 1024,
+    reject: false,
+    windowsHide: true,
+    ...(useStdin ? { input: prompt } : {}),
+    ...(signal ? { cancelSignal: signal } : {}),
+  })
 
   const durationMs = Date.now() - start
+
+  if (result.isCanceled) {
+    throw Object.assign(new Error(`CLI '${def.name}' was canceled`), { canceled: true })
+  }
 
   if (result.timedOut) {
     throw Object.assign(new Error(`CLI '${def.name}' timed out after ${timeoutMs}ms`), {

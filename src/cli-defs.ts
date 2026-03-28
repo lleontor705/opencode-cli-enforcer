@@ -11,6 +11,8 @@ export interface CliDef {
   strengths: string[]
   binary: string
   buildArgs: (prompt: string, mode: string) => string[]
+  /** Build args when prompt is delivered via stdin (for large prompts). */
+  buildStdinArgs?: (mode: string) => string[]
   fallbackOrder: CliName[]
 }
 
@@ -24,6 +26,10 @@ export const CLI_DEFS: Record<CliName, CliDef> = {
       mode === "analyze"
         ? ["-p", prompt, "--max-turns", "10"]
         : ["-p", prompt, "--allowedTools", ""],
+    buildStdinArgs: (mode) =>
+      mode === "analyze"
+        ? ["-p", "-", "--max-turns", "10"]
+        : ["-p", "-", "--allowedTools", ""],
     fallbackOrder: ["gemini", "codex"],
   },
   gemini: {
@@ -32,6 +38,7 @@ export const CLI_DEFS: Record<CliName, CliDef> = {
     strengths: ["research", "trends", "knowledge", "large-context"],
     binary: "gemini",
     buildArgs: (prompt, _mode) => ["-e", "none", "-p", prompt],
+    buildStdinArgs: (_mode) => ["-e", "none"],
     fallbackOrder: ["claude", "codex"],
   },
   codex: {
@@ -40,6 +47,7 @@ export const CLI_DEFS: Record<CliName, CliDef> = {
     strengths: ["code-generation", "edits", "refactoring"],
     binary: "codex",
     buildArgs: (prompt, _mode) => ["exec", prompt, "--full-auto"],
+    buildStdinArgs: (_mode) => ["exec", "-", "--full-auto"],
     fallbackOrder: ["claude", "gemini"],
   },
 }

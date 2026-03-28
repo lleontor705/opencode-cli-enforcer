@@ -63,6 +63,7 @@ export async function executeWithResilience(
   mode: string,
   timeoutSeconds: number,
   allowFallback: boolean,
+  signal?: AbortSignal,
 ): Promise<CliResponse> {
   const timeoutMs = timeoutSeconds * 1000
   const def = CLI_DEFS[targetCli]
@@ -102,6 +103,8 @@ export async function executeWithResilience(
 
     // Retry loop
     for (let attempt = 0; attempt <= ctx.retryConfig.maxRetries; attempt++) {
+      if (signal?.aborted) break
+
       if (attempt > 0) {
         const delay = calculateDelay(attempt - 1, ctx.retryConfig)
         await sleep(delay)
@@ -109,7 +112,7 @@ export async function executeWithResilience(
 
       try {
         stats.calls++
-        const result = await executeCliOnce(currentDef, prompt, mode, timeoutMs)
+        const result = await executeCliOnce(currentDef, prompt, mode, timeoutMs, signal)
 
         recordSuccess(breaker, ctx.breakerConfig)
         stats.totalMs += result.durationMs

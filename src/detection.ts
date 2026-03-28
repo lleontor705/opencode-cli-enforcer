@@ -2,7 +2,7 @@
  * CLI Auto-Detection — probes the system for installed CLI binaries.
  */
 
-import { execaCommand } from "execa"
+import { execa } from "execa"
 import { IS_WINDOWS } from "./platform"
 import { CLI_DEFS, ALL_CLI_NAMES, type CliName } from "./cli-defs"
 
@@ -15,15 +15,15 @@ export interface CliAvailability {
 
 export async function detectCli(name: CliName): Promise<CliAvailability> {
   const def = CLI_DEFS[name]
-  const whichCmd = IS_WINDOWS ? `where ${def.binary}` : `which ${def.binary}`
+  const whichBin = IS_WINDOWS ? "where" : "which"
 
   try {
-    const { stdout } = await execaCommand(whichCmd, { timeout: 5_000 })
+    const { stdout } = await execa(whichBin, [def.binary], { timeout: 5_000 })
     const path = stdout.trim().split("\n")[0] ?? null
 
     let version: string | null = null
     try {
-      const vResult = await execaCommand(`${def.binary} --version`, { timeout: 5_000 })
+      const vResult = await execa(def.binary, ["--version"], { timeout: 5_000 })
       version = vResult.stdout.trim().split("\n")[0] ?? null
     } catch {
       // version check is best-effort

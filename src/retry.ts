@@ -39,6 +39,9 @@ export function isRetryableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false
   const err = error as Record<string, unknown>
 
+  // Canceled errors should never be retried
+  if (err.canceled === true) return false
+
   if (err.timedOut === true) return true
 
   const msg = String(err.message ?? "").toLowerCase()
