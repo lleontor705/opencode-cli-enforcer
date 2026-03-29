@@ -1,170 +1,98 @@
-# opencode-cli-enforcer
+<p align="center">
+  <strong>opencode-cli-enforcer</strong><br>
+  <em>Resilient multi-LLM CLI orchestration for OpenCode</em>
+</p>
 
-Resilient multi-LLM CLI orchestration plugin for [OpenCode](https://opencode.ai). Execute Claude, Gemini, and Codex CLIs with automatic OS detection, circuit breaker, retry with backoff, and provider fallback.
+<p align="center">
+  <a href="https://github.com/lleontor705/opencode-cli-enforcer/actions/workflows/ci.yml"><img src="https://github.com/lleontor705/opencode-cli-enforcer/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://www.npmjs.com/package/opencode-cli-enforcer"><img src="https://img.shields.io/npm/v/opencode-cli-enforcer" alt="npm" /></a>
+  <a href="https://github.com/lleontor705/opencode-cli-enforcer/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License" /></a>
+</p>
 
-## Features
+---
 
-- **Cross-platform** — auto-detects Windows/macOS/Linux, uses [execa](https://github.com/sindresorhus/execa) for native process handling
-- **Auto-detection** — probes installed CLIs at startup (`which`/`where`), reports version and path
-- **Circuit breaker** — per-CLI failure isolation (closed → open → half-open) prevents cascading failures
-- **Retry with backoff** — exponential backoff + jitter for transient errors (rate limits, timeouts, network)
-- **Automatic fallback** — if the primary CLI fails, tries alternatives in defined order
-- **Structured responses** — MCP-style JSON output with `success`, `error`, `duration_ms`, `fallback_chain`
-- **Observability** — `cli_status` tool shows health, stats, and circuit state of all providers
+Execute Claude, Gemini, and Codex CLIs with automatic OS detection, circuit breaker pattern, retry with exponential backoff, and provider fallback. Cross-platform (Windows/macOS/Linux).
 
-## Installation
+## Install
 
-### From GitHub (recommended)
-
-In your `opencode.json`:
+### OpenCode plugin (recommended)
 
 ```json
 {
-  "plugin": [
-    "opencode-cli-enforcer@git+https://github.com/lleontor705/opencode-cli-enforcer.git"
-  ]
+  "plugin": ["opencode-cli-enforcer@latest"]
 }
 ```
 
-### From npm
+### npm
 
 ```bash
 bun add opencode-cli-enforcer
-# or
-npm install opencode-cli-enforcer
-```
-
-Then in `opencode.json`:
-
-```json
-{
-  "plugin": ["opencode-cli-enforcer"]
-}
-```
-
-### Local (development)
-
-```json
-{
-  "plugin": ["./path/to/opencode-cli-enforcer/src/index.ts"]
-}
 ```
 
 ## Tools
 
-### `cli_exec`
-
-Execute an external CLI with full resilience pipeline.
+### `cli_exec` — Execute a CLI with full resilience
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `cli` | `"claude" \| "gemini" \| "codex"` | required | Primary CLI to invoke |
-| `prompt` | `string` | required | The prompt to send |
-| `mode` | `"generate" \| "analyze"` | `"generate"` | `analyze` enables file reads (Claude only) |
-| `timeout_seconds` | `number` | `720` | Max seconds before kill (10–1800) |
-| `allow_fallback` | `boolean` | `true` | Try alternative CLIs on failure |
+| `cli` | `"claude" \| "gemini" \| "codex"` | required | Primary CLI |
+| `prompt` | `string` | required | Prompt to send |
+| `mode` | `"generate" \| "analyze"` | `"generate"` | `analyze` enables file reads (Claude) |
+| `timeout_seconds` | `number` | `720` | Max seconds (10-1800) |
+| `allow_fallback` | `boolean` | `true` | Try alternatives on failure |
 
-**Response:**
+### `cli_status` — Health check dashboard
 
-```json
-{
-  "success": true,
-  "cli": "claude",
-  "platform": "windows",
-  "stdout": "...",
-  "stderr": "",
-  "duration_ms": 4523,
-  "timed_out": false,
-  "used_fallback": false,
-  "fallback_chain": ["claude"],
-  "error": null,
-  "circuit_state": "closed",
-  "attempt": 1,
-  "max_attempts": 3
-}
-```
+Returns platform info, detection status, circuit breaker states, and usage stats for all providers.
 
-### `cli_status`
-
-Health check dashboard — no parameters.
-
-```json
-{
-  "platform": "windows",
-  "detection_complete": true,
-  "retry_config": { "max_retries": 2, "base_delay_ms": 1000, "max_delay_ms": 10000 },
-  "breaker_config": { "failure_threshold": 3, "cooldown_seconds": 60 },
-  "providers": [
-    {
-      "name": "claude",
-      "installed": true,
-      "path": "C:\\Users\\...\\claude.exe",
-      "version": "1.0.20",
-      "circuit_breaker": { "state": "closed", "consecutive_failures": 0 },
-      "usage": { "total_calls": 5, "success_rate": "100%", "avg_duration_ms": 3200 },
-      "fallback_order": ["gemini", "codex"]
-    }
-  ]
-}
-```
-
-## Architecture
+## Resilience Pipeline
 
 ```
-┌─────────────────────────────────────────────────┐
-│                   cli_exec tool                  │
-├─────────────────────────────────────────────────┤
-│  ┌─────────┐   ┌─────────┐   ┌───────────────┐ │
-│  │ Circuit  │──▶│  Retry  │──▶│   Executor    │ │
-│  │ Breaker  │   │ Backoff │   │   (execa)     │ │
-│  └─────────┘   └─────────┘   └───────────────┘ │
-│       │              │               │           │
-│       ▼              ▼               ▼           │
-│  ┌─────────────────────────────────────────┐    │
-│  │         Fallback Chain                   │    │
-│  │   claude → gemini → codex               │    │
-│  └─────────────────────────────────────────┘    │
-├─────────────────────────────────────────────────┤
-│  Auto-detection │ Platform │ Prompt injection    │
-└─────────────────────────────────────────────────┘
+Request --> Circuit Breaker --> Retry (3x, exp backoff) --> Execute (execa)
+               |                        |                        |
+               v                        v                        v
+          If open:                 If exhausted:            On failure:
+          skip to                  try next CLI             record + retry
+          fallback                 in chain
 ```
 
-### Resilience Pipeline
-
-1. **Circuit breaker check** — if the CLI's circuit is open, skip to fallback
-2. **Execute with retry** — up to 3 attempts with exponential backoff (1s → 2s → 4s) and ±30% jitter
-3. **Record outcome** — success resets failures; failure increments counter
-4. **Fallback** — if all retries exhausted, try next CLI in the fallback chain
-5. **Structured response** — always returns JSON with full execution metadata
-
-### Circuit Breaker States
+**Circuit Breaker States:**
 
 | State | Behavior |
 |-------|----------|
-| **closed** | Normal — requests pass through |
-| **open** | Blocked — 3+ consecutive failures, wait 60s cooldown |
-| **half-open** | Probe — after cooldown, allow 1 request to test recovery |
+| closed | Normal — requests pass through |
+| open | Blocked — 3+ failures, 60s cooldown |
+| half-open | Probe — 1 request to test recovery |
+
+**Fallback Order:** `claude --> gemini --> codex`
 
 ## Supported CLIs
 
-| CLI | Binary | Best For |
-|-----|--------|----------|
-| Claude | `claude` | Reasoning, code analysis, debugging, architecture |
-| Gemini | `gemini` | Research, trends, broad knowledge, large context |
-| Codex | `codex` | Code generation, edits, refactoring |
+| CLI | Best For |
+|-----|----------|
+| Claude | Reasoning, code analysis, debugging, architecture |
+| Gemini | Research, broad knowledge, large context |
+| Codex | Code generation, edits, refactoring |
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) runtime
-- At least one CLI installed: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), or [Codex CLI](https://github.com/openai/codex)
+- At least one CLI: [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), or [Codex CLI](https://github.com/openai/codex)
 
 ## Development
 
 ```bash
 bun install
 bun test
-bun test --watch
 ```
+
+## Contributing
+
+1. Fork the repo
+2. Create a feature branch from `develop`: `git checkout -b feat/my-feature develop`
+3. Make your changes and add tests
+4. Run `bun test`
+5. Open a PR to `develop`
 
 ## License
 
