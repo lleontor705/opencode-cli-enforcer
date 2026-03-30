@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   test:
@@ -41,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -49,14 +52,25 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
       - run: bun install
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            PKG_VERSION=$(node -p "require('./package.json').version")
+            TAG="v${PKG_VERSION}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          npm version "${TAG#v}" --no-git-tag-version --allow-same-version
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create tag and release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="v$(node -p "require('./package.json').version")"
+          TAG="${{ steps.version.outputs.tag }}"
           git tag "$TAG" 2>/dev/null && git push origin "$TAG" || echo "Tag exists"
           gh release create "$TAG" --title "$TAG" --generate-notes || echo "Release exists"

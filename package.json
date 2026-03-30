@@ -18,6 +18,9 @@
   ],
   "author": "lleontor705",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/lleontor705/opencode-cli-enforcer.git"
