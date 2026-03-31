@@ -13,11 +13,13 @@ import {
   recordFailure,
 } from "./circuit-breaker"
 import type { RetryConfig } from "./retry"
-import { DEFAULT_RETRY_CONFIG, calculateDelay, sleep, isRetryableError } from "./retry"
+import { DEFAULT_RETRY_CONFIG, calculateDelay, sleep } from "./retry"
 import { executeCliOnce } from "./executor"
 import type { CliAvailability } from "./detection"
 import type { Platform } from "./platform"
 import type { CircuitState } from "./circuit-breaker"
+import { classifyError, type ErrorClass } from "./error-classifier"
+import { redactSecrets } from "./redact"
 
 // ─── Structured Response (MCP pattern) ─────────────────────────────────────
 
@@ -32,6 +34,7 @@ export interface CliResponse {
   used_fallback: boolean
   fallback_chain: string[]
   error: string | null
+  error_class: ErrorClass | null
   circuit_state: CircuitState
   attempt: number
   max_attempts: number
@@ -128,6 +131,7 @@ export async function executeWithResilience(
           used_fallback: cliName !== targetCli,
           fallback_chain: fallbackChain,
           error: null,
+          error_class: null,
           circuit_state: breaker.state,
           attempt: attempt + 1,
           max_attempts: ctx.retryConfig.maxRetries + 1,
@@ -135,14 +139,29 @@ export async function executeWithResilience(
       } catch (err: unknown) {
         stats.failures++
 
-        const retryable = isRetryableError(err)
-        const isLastAttempt = attempt === ctx.retryConfig.maxRetries
+        const errorClass = classifyError(err)
 
-        if (!retryable || isLastAttempt) {
+        // permanent and crash errors: skip retries, fallback immediately
+        if (errorClass === "permanent" || errorClass === "crash") {
           recordFailure(breaker, ctx.breakerConfig)
           break // try next CLI in fallback chain
         }
-        // retryable — loop continues
+
+        // rate_limit: wait longer before retrying
+        if (errorClass === "rate_limit") {
+          const rateLimitDelay = calculateDelay(attempt + 1, {
+            ...ctx.retryConfig,
+            baseDelayMs: ctx.retryConfig.baseDelayMs * 3,
+          })
+          await sleep(rateLimitDelay)
+        }
+
+        const isLastAttempt = attempt === ctx.retryConfig.maxRetries
+        if (isLastAttempt) {
+          recordFailure(breaker, ctx.breakerConfig)
+          break // try next CLI in fallback chain
+        }
+        // transient or rate_limit — loop continues with retry
       }
     }
   }
@@ -158,7 +177,10 @@ export async function executeWithResilience(
     timed_out: false,
     used_fallback: fallbackChain.length > 1,
     fallback_chain: fallbackChain,
-    error: `All CLI providers exhausted. Tried: ${fallbackChain.join(" → ")}. Check cli_status for details.`,
+    error: redactSecrets(
+      `All CLI providers exhausted. Tried: ${fallbackChain.join(" → ")}. Check cli_status for details.`,
+    ),
+    error_class: "transient",
     circuit_state: ctx.breakers.get(targetCli)!.state,
     attempt: ctx.retryConfig.maxRetries + 1,
     max_attempts: ctx.retryConfig.maxRetries + 1,

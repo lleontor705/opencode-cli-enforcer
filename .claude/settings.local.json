@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.ts$|\\\\.js$|\\\\.json$\")",
+      "Bash(xargs wc:*)",
+      "Bash(bun test:*)",
+      "Bash(bun run:*)"
+    ]
+  }
+}

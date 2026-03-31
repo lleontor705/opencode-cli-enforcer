@@ -24,6 +24,7 @@ import { DEFAULT_RETRY_CONFIG } from "./retry"
 import { detectAllClis, type CliAvailability } from "./detection"
 import { truncate } from "./executor"
 import { executeWithResilience, type ResilienceContext, type UsageStats } from "./resilience"
+import { redactSecrets } from "./redact"
 
 // Agents that should NOT receive CLI injection
 const NO_CLI_AGENTS = new Set(["orchestrator", "task_decomposer"])
@@ -141,7 +142,8 @@ Rules: One concern per call. Split large requests. Include "CLI Consultations" i
           return {
             ...response,
             stdout: truncate(response.stdout, 50_000),
-            stderr: truncate(response.stderr, 5_000),
+            stderr: redactSecrets(truncate(response.stderr, 5_000)),
+            error: response.error ? redactSecrets(response.error) : null,
           }
         },
       }),

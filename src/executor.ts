@@ -4,6 +4,8 @@
 
 import { execa } from "execa"
 import type { CliDef } from "./cli-defs"
+import { getSafeEnv } from "./safe-env"
+import { redactSecrets } from "./redact"
 
 /** Prompts longer than this (chars) are delivered via stdin to avoid OS arg-length limits. */
 export const STDIN_THRESHOLD = 30_000
@@ -30,6 +32,7 @@ export async function executeCliOnce(
     maxBuffer: 10 * 1024 * 1024,
     reject: false,
     windowsHide: true,
+    env: getSafeEnv(),
     ...(useStdin ? { input: prompt } : {}),
     ...(signal ? { cancelSignal: signal } : {}),
   })
@@ -47,8 +50,11 @@ export async function executeCliOnce(
   }
 
   if (result.failed && result.exitCode !== 0) {
-    const msg = result.stderr?.trim() || result.message || `Exit code ${result.exitCode}`
-    throw new Error(`CLI '${def.name}' failed: ${msg}`)
+    const rawMsg = result.stderr?.trim() || result.message || `Exit code ${result.exitCode}`
+    const msg = redactSecrets(rawMsg)
+    throw Object.assign(new Error(`CLI '${def.name}' failed: ${msg}`), {
+      exitCode: result.exitCode,
+    })
   }
 
   return {
