@@ -3,14 +3,14 @@
  *
  * States:
  *   closed    → normal operation, requests pass through
- *   open      → too many failures, requests are blocked
+ *   open      → too many failures OR too many timeouts, requests are blocked
  *   half-open → cooldown elapsed, one probe request allowed
  *
  * Transitions:
- *   closed  →(N failures)→  open
- *   open    →(cooldown)→    half-open
- *   half-open →(success)→   closed
- *   half-open →(failure)→   open
+ *   closed  →(N failures OR M timeouts)→  open
+ *   open    →(cooldown)→                  half-open
+ *   half-open →(success)→                 closed
+ *   half-open →(failure/timeout)→         open
  */
 
 export type CircuitState = "closed" | "open" | "half-open"
@@ -18,15 +18,21 @@ export type CircuitState = "closed" | "open" | "half-open"
 export interface CircuitBreaker {
   state: CircuitState
   failures: number
+  timeouts: number
   successes: number
   lastFailure: number | null
   lastSuccess: number | null
   openedAt: number | null
+  totalExecutions: number
+  totalFailures: number
+  totalTimeouts: number
 }
 
 export interface BreakerConfig {
   /** Consecutive failures before opening the circuit */
   failureThreshold: number
+  /** Consecutive timeouts before opening (higher than failures: slow ≠ broken) */
+  timeoutThreshold: number
   /** Ms to wait before transitioning from open → half-open */
   cooldownMs: number
   /** Successes in half-open needed to close the circuit */
@@ -35,6 +41,7 @@ export interface BreakerConfig {
 
 export const DEFAULT_BREAKER_CONFIG: BreakerConfig = {
   failureThreshold: 3,
+  timeoutThreshold: 5,
   cooldownMs: 60_000,
   halfOpenSuccessThreshold: 1,
 }
@@ -43,10 +50,14 @@ export function createBreaker(): CircuitBreaker {
   return {
     state: "closed",
     failures: 0,
+    timeouts: 0,
     successes: 0,
     lastFailure: null,
     lastSuccess: null,
     openedAt: null,
+    totalExecutions: 0,
+    totalFailures: 0,
+    totalTimeouts: 0,
   }
 }
 
@@ -75,8 +86,10 @@ export function recordSuccess(
   config: BreakerConfig = DEFAULT_BREAKER_CONFIG,
   now: number = Date.now(),
 ): void {
+  breaker.totalExecutions++
   breaker.lastSuccess = now
   breaker.failures = 0
+  breaker.timeouts = 0
 
   if (breaker.state === "half-open") {
     breaker.successes++
@@ -93,6 +106,8 @@ export function recordFailure(
   config: BreakerConfig = DEFAULT_BREAKER_CONFIG,
   now: number = Date.now(),
 ): void {
+  breaker.totalExecutions++
+  breaker.totalFailures++
   breaker.failures++
   breaker.lastFailure = now
 
@@ -103,6 +118,28 @@ export function recordFailure(
   }
 
   if (breaker.failures >= config.failureThreshold) {
+    breaker.state = "open"
+    breaker.openedAt = now
+  }
+}
+
+export function recordTimeout(
+  breaker: CircuitBreaker,
+  config: BreakerConfig = DEFAULT_BREAKER_CONFIG,
+  now: number = Date.now(),
+): void {
+  breaker.totalExecutions++
+  breaker.totalTimeouts++
+  breaker.timeouts++
+  breaker.lastFailure = now
+
+  if (breaker.state === "half-open") {
+    breaker.state = "open"
+    breaker.openedAt = now
+    return
+  }
+
+  if (breaker.timeouts >= config.timeoutThreshold) {
     breaker.state = "open"
     breaker.openedAt = now
   }

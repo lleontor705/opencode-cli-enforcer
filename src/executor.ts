@@ -1,66 +1,114 @@
 /**
  * Core Execution Engine — runs a CLI binary via execa with structured output.
+ * Returns structured results (never throws) to support global time budget.
  */
 
 import { execa } from "execa"
+import path from "node:path"
+import os from "node:os"
 import type { CliDef } from "./cli-defs"
+import { buildTimeoutArgs } from "./cli-defs"
 import { getSafeEnv } from "./safe-env"
 import { redactSecrets } from "./redact"
+import { IS_WINDOWS } from "./platform"
 
 /** Prompts longer than this (chars) are delivered via stdin to avoid OS arg-length limits. */
 export const STDIN_THRESHOLD = 30_000
+const MAX_BUFFER = 10 * 1024 * 1024 // 10MB
 
 export interface ExecResult {
   stdout: string
   stderr: string
+  exitCode: number
   durationMs: number
+  timedOut: boolean
+}
+
+/**
+ * On Windows, CLIs installed via npm/scoop/cargo may be .cmd/.bat shims.
+ * Wrap with `cmd /c` so execa can execute them without a shell.
+ */
+function resolveCommand(binary: string): { file: string; prefix: string[] } {
+  if (!IS_WINDOWS) return { file: binary, prefix: [] }
+
+  const ext = path.extname(binary).toLowerCase()
+  if (ext === ".cmd" || ext === ".bat") {
+    return { file: "cmd", prefix: ["/c", binary] }
+  }
+
+  const pathext = (process.env.PATHEXT || "").toLowerCase()
+  if (pathext.includes(".cmd") || pathext.includes(".bat")) {
+    return { file: "cmd", prefix: ["/c", binary] }
+  }
+
+  return { file: binary, prefix: [] }
+}
+
+/** Enhance PATH on Windows with common CLI install locations */
+function getEnhancedPath(): string | undefined {
+  if (!IS_WINDOWS) return undefined
+
+  const home = os.homedir()
+  const extraPaths = [
+    path.join(home, "AppData", "Roaming", "npm"),
+    path.join(home, "scoop", "shims"),
+    path.join(home, ".cargo", "bin"),
+    path.join(home, "AppData", "Local", "pnpm"),
+  ]
+
+  const currentPath = process.env.PATH || ""
+  return [...extraPaths, currentPath].join(path.delimiter)
 }
 
 export async function executeCliOnce(
   def: CliDef,
   prompt: string,
   mode: string,
-  timeoutMs: number,
+  timeoutSeconds: number,
   signal?: AbortSignal,
 ): Promise<ExecResult> {
   const useStdin = def.buildStdinArgs != null && prompt.length > STDIN_THRESHOLD
-  const args = useStdin ? def.buildStdinArgs!(mode) : def.buildArgs(prompt, mode)
+  const baseArgs = useStdin ? def.buildStdinArgs!(mode) : def.buildArgs(prompt, mode)
+  const timeoutHints = buildTimeoutArgs(def.name, timeoutSeconds)
+  const args = [...baseArgs, ...timeoutHints]
+
+  const { file, prefix } = resolveCommand(def.binary)
+  const finalArgs = [...prefix, ...args]
+
+  const env = getSafeEnv()
+  const enhancedPath = getEnhancedPath()
+  if (enhancedPath) {
+    env.PATH = enhancedPath
+  }
+
   const start = Date.now()
 
-  const result = await execa(def.binary, args, {
-    timeout: timeoutMs,
-    maxBuffer: 10 * 1024 * 1024,
-    reject: false,
-    windowsHide: true,
-    env: getSafeEnv(),
-    ...(useStdin ? { input: prompt } : {}),
-    ...(signal ? { cancelSignal: signal } : {}),
-  })
-
-  const durationMs = Date.now() - start
-
-  if (result.isCanceled) {
-    throw Object.assign(new Error(`CLI '${def.name}' was canceled`), { canceled: true })
-  }
-
-  if (result.timedOut) {
-    throw Object.assign(new Error(`CLI '${def.name}' timed out after ${timeoutMs}ms`), {
-      timedOut: true,
+  try {
+    const result = await execa(file, finalArgs, {
+      timeout: timeoutSeconds * 1000,
+      maxBuffer: MAX_BUFFER,
+      reject: false,
+      windowsHide: true,
+      env,
+      ...(useStdin ? { input: prompt } : {}),
+      ...(signal ? { cancelSignal: signal } : {}),
     })
-  }
 
-  if (result.failed && result.exitCode !== 0) {
-    const rawMsg = result.stderr?.trim() || result.message || `Exit code ${result.exitCode}`
-    const msg = redactSecrets(rawMsg)
-    throw Object.assign(new Error(`CLI '${def.name}' failed: ${msg}`), {
-      exitCode: result.exitCode,
-    })
-  }
-
-  return {
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    durationMs,
+    return {
+      stdout: result.stdout || "",
+      stderr: redactSecrets(result.stderr || ""),
+      exitCode: result.exitCode ?? 1,
+      durationMs: Date.now() - start,
+      timedOut: result.timedOut ?? false,
+    }
+  } catch (error: any) {
+    return {
+      stdout: "",
+      stderr: redactSecrets(error.message || "Execution failed"),
+      exitCode: 1,
+      durationMs: Date.now() - start,
+      timedOut: !!error.timedOut,
+    }
   }
 }
 

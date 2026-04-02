@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 380" width="780" height="380">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .title { font-size: 15px; font-weight: 700; fill: #1e1b4b; }
+    .label { font-size: 11px; fill: #4b5563; }
+    .label-sm { font-size: 10px; fill: #6b7280; }
+    .label-w { font-size: 11px; fill: #ffffff; font-weight: 600; }
+    .step-num { font-size: 20px; font-weight: 700; fill: #ffffff; }
+  </style>
+  <defs>
+    <marker id="a1" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#6366f1"/>
+    </marker>
+    <marker id="a2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#ef4444"/>
+    </marker>
+  </defs>
+
+  <rect width="780" height="380" rx="12" fill="#fafafe"/>
+  <text x="390" y="30" text-anchor="middle" class="title">Resilience Pipeline — Request Flow</text>
+
+  <!-- Step 1: Request -->
+  <circle cx="60" cy="90" r="24" fill="#6366f1"/>
+  <text x="60" y="97" text-anchor="middle" class="step-num">1</text>
+  <text x="60" y="132" text-anchor="middle" class="label" font-weight="600">Request</text>
+  <text x="60" y="146" text-anchor="middle" class="label-sm">cli_exec()</text>
+
+  <line x1="84" y1="90" x2="130" y2="90" stroke="#6366f1" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- Step 2: Budget Check -->
+  <rect x="140" y="65" width="120" height="50" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="155" cy="78" r="10" fill="#f59e0b"/>
+  <text x="155" y="82" text-anchor="middle" class="step-num" font-size="12">2</text>
+  <text x="210" y="86" text-anchor="middle" class="label" font-weight="600">Budget OK?</text>
+  <text x="210" y="102" text-anchor="middle" class="label-sm">remaining &gt; 0</text>
+
+  <line x1="260" y1="90" x2="300" y2="90" stroke="#6366f1" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- Step 3: Circuit Breaker -->
+  <rect x="310" y="65" width="130" height="50" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="1.5"/>
+  <circle cx="325" cy="78" r="10" fill="#ef4444"/>
+  <text x="325" y="82" text-anchor="middle" class="step-num" font-size="12">3</text>
+  <text x="385" y="86" text-anchor="middle" class="label" font-weight="600">Breaker Closed?</text>
+  <text x="385" y="102" text-anchor="middle" class="label-sm">check state</text>
+
+  <line x1="440" y1="90" x2="480" y2="90" stroke="#6366f1" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- Step 4: Execute -->
+  <rect x="490" y="65" width="120" height="50" rx="8" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+  <circle cx="505" cy="78" r="10" fill="#6366f1"/>
+  <text x="505" y="82" text-anchor="middle" class="step-num" font-size="12">4</text>
+  <text x="560" y="86" text-anchor="middle" class="label" font-weight="600">Execute CLI</text>
+  <text x="560" y="102" text-anchor="middle" class="label-sm">execa + timeout</text>
+
+  <line x1="610" y1="90" x2="650" y2="90" stroke="#6366f1" stroke-width="2" marker-end="url(#a1)"/>
+
+  <!-- Step 5: Success -->
+  <rect x="660" y="65" width="100" height="50" rx="25" fill="#22c55e"/>
+  <text x="710" y="95" text-anchor="middle" class="label-w">Success!</text>
+
+  <!-- Failure paths -->
+
+  <!-- Budget exhausted -->
+  <line x1="200" y1="115" x2="200" y2="175" stroke="#ef4444" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="140" y="180" width="120" height="36" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1"/>
+  <text x="200" y="203" text-anchor="middle" class="label-sm" fill="#ef4444" font-weight="600">All providers failed</text>
+
+  <!-- Breaker open → skip to fallback -->
+  <line x1="375" y1="115" x2="375" y2="175" stroke="#ef4444" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="310" y="180" width="130" height="36" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1"/>
+  <text x="375" y="203" text-anchor="middle" class="label-sm" fill="#ef4444" font-weight="600">Skip to fallback</text>
+
+  <!-- Execute failure paths -->
+  <line x1="550" y1="115" x2="550" y2="165" stroke="#ef4444" stroke-width="1.5"/>
+
+  <!-- Branch: timeout -->
+  <rect x="460" y="175" width="100" height="36" rx="6" fill="#fef9c3" stroke="#eab308" stroke-width="1"/>
+  <text x="510" y="198" text-anchor="middle" class="label-sm" fill="#854d0e" font-weight="600">Timeout?</text>
+  <line x1="550" y1="165" x2="510" y2="175" stroke="#ef4444" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- Branch: classify -->
+  <rect x="580" y="175" width="120" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1"/>
+  <text x="640" y="198" text-anchor="middle" class="label-sm" fill="#7e22ce" font-weight="600">Classify Error</text>
+  <line x1="550" y1="165" x2="620" y2="175" stroke="#ef4444" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- Timeout → skip retries -->
+  <line x1="510" y1="211" x2="510" y2="240" stroke="#eab308" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="450" y="245" width="120" height="30" rx="6" fill="#fef3c7" stroke="#eab308" stroke-width="1"/>
+  <text x="510" y="265" text-anchor="middle" class="label-sm" fill="#854d0e">Skip retries</text>
+
+  <!-- Classify branches -->
+  <line x1="640" y1="211" x2="640" y2="230" stroke="#a855f7" stroke-width="1.5"/>
+
+  <!-- Transient -->
+  <rect x="580" y="240" width="80" height="28" rx="6" fill="#dcfce7" stroke="#22c55e" stroke-width="1"/>
+  <text x="620" y="259" text-anchor="middle" class="label-sm" fill="#166534">Transient</text>
+  <line x1="640" y1="230" x2="620" y2="240" stroke="#a855f7" stroke-width="1"/>
+
+  <!-- Permanent -->
+  <rect x="670" y="240" width="80" height="28" rx="6" fill="#fee2e2" stroke="#ef4444" stroke-width="1"/>
+  <text x="710" y="259" text-anchor="middle" class="label-sm" fill="#991b1b">Permanent</text>
+  <line x1="640" y1="230" x2="710" y2="240" stroke="#a855f7" stroke-width="1"/>
+
+  <!-- Transient → retry -->
+  <line x1="620" y1="268" x2="620" y2="295" stroke="#22c55e" stroke-width="1.5" marker-end="url(#a1)"/>
+  <rect x="570" y="300" width="100" height="28" rx="6" fill="#e0e7ff" stroke="#6366f1" stroke-width="1"/>
+  <text x="620" y="319" text-anchor="middle" class="label-sm" fill="#3730a3" font-weight="600">Retry (backoff)</text>
+
+  <!-- Permanent → fallback -->
+  <line x1="710" y1="268" x2="710" y2="295" stroke="#ef4444" stroke-width="1.5" marker-end="url(#a2)"/>
+  <rect x="660" y="300" width="100" height="28" rx="6" fill="#fef2f2" stroke="#ef4444" stroke-width="1"/>
+  <text x="710" y="319" text-anchor="middle" class="label-sm" fill="#ef4444" font-weight="600">Next provider</text>
+
+  <!-- Timeout → fallback too -->
+  <line x1="510" y1="275" x2="510" y2="300" stroke="#eab308" stroke-width="1.5"/>
+  <path d="M510 300 Q510 340 660 312" fill="none" stroke="#eab308" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <!-- Retry loops back -->
+  <path d="M570 314 Q490 314 490 100 Q490 90 490 90" fill="none" stroke="#6366f1" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#a1)"/>
+  <text x="472" y="210" text-anchor="middle" class="label-sm" fill="#6366f1" transform="rotate(-90,472,210)">retry loop</text>
+
+  <!-- Legend -->
+  <rect x="30" y="345" width="12" height="12" rx="2" fill="#22c55e"/>
+  <text x="48" y="356" class="label-sm">Success path</text>
+  <rect x="140" y="345" width="12" height="12" rx="2" fill="#ef4444"/>
+  <text x="158" y="356" class="label-sm">Failure / fallback</text>
+  <rect x="260" y="345" width="12" height="12" rx="2" fill="#eab308"/>
+  <text x="278" y="356" class="label-sm">Timeout (skip retries)</text>
+  <rect x="410" y="345" width="12" height="12" rx="2" fill="#6366f1"/>
+  <text x="428" y="356" class="label-sm">Retry with backoff</text>
+</svg>

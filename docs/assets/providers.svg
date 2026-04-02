@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 260" width="700" height="260">
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .name { font-size: 16px; font-weight: 700; fill: #ffffff; }
+    .binary { font-size: 11px; fill: #ffffff; opacity: 0.8; font-family: monospace; }
+    .tag { font-size: 10px; fill: #ffffff; font-weight: 500; }
+    .title { font-size: 15px; font-weight: 700; fill: #1e1b4b; }
+    .fallback { font-size: 9px; fill: #6b7280; }
+  </style>
+
+  <rect width="700" height="260" rx="12" fill="#fafafe"/>
+  <text x="350" y="28" text-anchor="middle" class="title">Supported CLI Providers</text>
+
+  <!-- Claude -->
+  <rect x="20" y="50" width="210" height="190" rx="12" fill="#3b82f6"/>
+  <text x="125" y="82" text-anchor="middle" class="name">Claude</text>
+  <text x="125" y="100" text-anchor="middle" class="binary">$ claude</text>
+
+  <rect x="35" y="115" width="82" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="76" y="130" text-anchor="middle" class="tag">reasoning</text>
+
+  <rect x="123" y="115" width="92" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="169" y="130" text-anchor="middle" class="tag">code-analysis</text>
+
+  <rect x="35" y="143" width="82" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="76" y="158" text-anchor="middle" class="tag">debugging</text>
+
+  <rect x="123" y="143" width="92" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="169" y="158" text-anchor="middle" class="tag">architecture</text>
+
+  <rect x="35" y="171" width="72" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="71" y="186" text-anchor="middle" class="tag">planning</text>
+
+  <text x="125" y="215" text-anchor="middle" class="fallback">fallback: gemini &rarr; codex</text>
+
+  <!-- Gemini -->
+  <rect x="245" y="50" width="210" height="190" rx="12" fill="#22c55e"/>
+  <text x="350" y="82" text-anchor="middle" class="name">Gemini</text>
+  <text x="350" y="100" text-anchor="middle" class="binary">$ gemini</text>
+
+  <rect x="260" y="115" width="76" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="298" y="130" text-anchor="middle" class="tag">research</text>
+
+  <rect x="342" y="115" width="98" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="391" y="130" text-anchor="middle" class="tag">large-context</text>
+
+  <rect x="260" y="143" width="64" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="292" y="158" text-anchor="middle" class="tag">trends</text>
+
+  <rect x="330" y="143" width="86" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="373" y="158" text-anchor="middle" class="tag">knowledge</text>
+
+  <rect x="260" y="171" width="86" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="303" y="186" text-anchor="middle" class="tag">web-search</text>
+
+  <text x="350" y="215" text-anchor="middle" class="fallback">fallback: claude &rarr; codex</text>
+
+  <!-- Codex -->
+  <rect x="470" y="50" width="210" height="190" rx="12" fill="#ec4899"/>
+  <text x="575" y="82" text-anchor="middle" class="name">Codex</text>
+  <text x="575" y="100" text-anchor="middle" class="binary">$ codex</text>
+
+  <rect x="485" y="115" width="104" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="537" y="130" text-anchor="middle" class="tag">code-generation</text>
+
+  <rect x="595" y="115" width="70" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="630" y="130" text-anchor="middle" class="tag">full-auto</text>
+
+  <rect x="485" y="143" width="56" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="513" y="158" text-anchor="middle" class="tag">edits</text>
+
+  <rect x="547" y="143" width="86" height="22" rx="11" fill="rgba(255,255,255,0.2)"/>
+  <text x="590" y="158" text-anchor="middle" class="tag">refactoring</text>
+
+  <text x="575" y="215" text-anchor="middle" class="fallback">fallback: claude &rarr; gemini</text>
+</svg>
