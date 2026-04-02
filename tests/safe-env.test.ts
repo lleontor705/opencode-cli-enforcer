@@ -6,16 +6,26 @@ describe("SAFE_ENV_VARS", () => {
     expect(SAFE_ENV_VARS).toContain("PATH")
   })
 
-  it("includes API key vars", () => {
-    expect(SAFE_ENV_VARS).toContain("ANTHROPIC_API_KEY")
-    expect(SAFE_ENV_VARS).toContain("GOOGLE_API_KEY")
-    expect(SAFE_ENV_VARS).toContain("OPENAI_API_KEY")
+  it("does NOT include API key vars (CLIs handle their own auth)", () => {
+    expect(SAFE_ENV_VARS).not.toContain("ANTHROPIC_API_KEY")
+    expect(SAFE_ENV_VARS).not.toContain("GOOGLE_API_KEY")
+    expect(SAFE_ENV_VARS).not.toContain("OPENAI_API_KEY")
   })
 
-  it("includes proxy vars", () => {
+  it("includes Windows system vars", () => {
+    expect(SAFE_ENV_VARS).toContain("USERPROFILE")
+    expect(SAFE_ENV_VARS).toContain("SYSTEMROOT")
+    expect(SAFE_ENV_VARS).toContain("APPDATA")
+    expect(SAFE_ENV_VARS).toContain("PATHEXT")
+  })
+
+  it("includes proxy vars with both casings", () => {
     expect(SAFE_ENV_VARS).toContain("HTTP_PROXY")
     expect(SAFE_ENV_VARS).toContain("HTTPS_PROXY")
     expect(SAFE_ENV_VARS).toContain("NO_PROXY")
+    expect(SAFE_ENV_VARS).toContain("http_proxy")
+    expect(SAFE_ENV_VARS).toContain("https_proxy")
+    expect(SAFE_ENV_VARS).toContain("no_proxy")
   })
 })
 

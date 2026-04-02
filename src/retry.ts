@@ -31,8 +31,23 @@ export function calculateDelay(
   return Math.max(0, Math.round(capped + jitter))
 }
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/** Abort-aware sleep — rejects immediately if signal fires during the wait. */
+export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error("aborted"))
+      return
+    }
+    const timer = setTimeout(resolve, ms)
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer)
+        reject(new Error("aborted"))
+      },
+      { once: true },
+    )
+  })
 }
 
 export function isRetryableError(error: unknown): boolean {
