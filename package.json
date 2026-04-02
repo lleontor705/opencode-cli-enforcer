@@ -1,9 +1,15 @@
 {
   "name": "opencode-cli-enforcer",
   "version": "1.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
   "description": "OpenCode plugin for resilient multi-LLM CLI orchestration (Claude, Gemini, Codex) with circuit breaker, retry, fallback, and cross-platform support",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
   "keywords": [
     "opencode",
     "opencode-plugin",
@@ -26,7 +32,7 @@
     "url": "https://github.com/lleontor705/opencode-cli-enforcer.git"
   },
   "files": [
-    "src/",
+    "dist",
     "README.md",
     "LICENSE"
   ],
@@ -37,15 +43,18 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "tsup": "^8.4.0",
     "typescript": "^5.7.0"
   },
   "engines": {
+    "node": ">=18.0.0",
     "bun": ">=1.3.5"
   },
   "scripts": {
+    "build": "tsup",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "typecheck": "bun build src/index.ts --no-bundle --outdir /dev/null",
-    "build": "bun build src/index.ts --no-bundle"
+    "typecheck": "bun x tsc --noEmit",
+    "prepublishOnly": "npm run build && npm test"
   }
 }
