@@ -12,7 +12,7 @@ jobs:
     with:
       node-version: "22"
       package-manager: "bun"
-      lint-command: "bun run typecheck"
+      lint-command: "bun x tsc --noEmit"
       test-command: "bun test"
 
   security:
