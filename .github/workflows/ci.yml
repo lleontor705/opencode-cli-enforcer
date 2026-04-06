@@ -8,14 +8,14 @@ on:
 
 jobs:
   quality:
-    uses: lleontor705/ats-deploy/.github/workflows/quality-node.yml@main
+    uses: lleontor705/ats-deploy-public/.github/workflows/quality-node.yml@main
     with:
       node-version: "22"
       package-manager: "bun"
       test-command: "bun test"
 
   security:
-    uses: lleontor705/ats-deploy/.github/workflows/security-scan.yml@main
+    uses: lleontor705/ats-deploy-public/.github/workflows/security-scan.yml@main
 
   test-matrix:
     strategy:
