@@ -1,0 +1,13 @@
+src/
+tests/
+.github/
+.claude/
+.husky/
+.git/
+tsconfig.json
+tsup.config.ts
+claude-prompt.txt
+*.log
+.DS_Store
+bun.lockb
+bun.lock
