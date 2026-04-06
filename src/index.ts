@@ -28,7 +28,7 @@ import { redactSecrets } from "./redact"
 // Agents that should NOT receive CLI injection
 const NO_CLI_AGENTS = new Set(["orchestrator", "task_decomposer"])
 
-export default ((ctx) => {
+export default (async (ctx) => {
   // ── State ──────────────────────────────────────────────────────────────
 
   const breakers = new Map<CliName, ReturnType<typeof createBreaker>>()
