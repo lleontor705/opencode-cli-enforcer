@@ -15,7 +15,6 @@
 
 import type { Plugin } from "@opencode-ai/plugin"
 import { tool } from "@opencode-ai/plugin"
-import { z } from "zod"
 
 import { PLATFORM } from "./platform"
 import { CLI_DEFS, ALL_CLI_NAMES, type CliName } from "./cli-defs"
@@ -102,58 +101,53 @@ Rules: One concern per call. Split large requests. Include "CLI Consultations" i
   // ── Tools ──────────────────────────────────────────────────────────────
 
   return {
-    tools: [
-      tool({
-        name: "cli_exec",
+    tool: {
+      cli_exec: tool({
         description:
           "Execute an external CLI (claude, gemini, codex) with automatic OS detection, timeout, " +
           "retry with exponential backoff, circuit breaker protection, and fallback to alternative providers.",
-        parameters: z.object({
-          cli: z.enum(["claude", "gemini", "codex"]).describe("Primary CLI to invoke"),
-          prompt: z.string().min(1).max(100_000).describe("The prompt to send to the CLI"),
-          mode: z
+        args: {
+          cli: tool.schema.enum(["claude", "gemini", "codex"]).describe("Primary CLI to invoke"),
+          prompt: tool.schema.string().describe("The prompt to send to the CLI"),
+          mode: tool.schema
             .enum(["generate", "analyze"])
-            .default("generate")
+            .optional()
             .describe("'generate' = self-contained prompt; 'analyze' = allow file reads (Claude only)"),
-          timeout_seconds: z
+          timeout_seconds: tool.schema
             .number()
-            .int()
-            .min(10)
-            .max(1800)
-            .default(720)
-            .describe("Max seconds before killing the process"),
-          allow_fallback: z
+            .optional()
+            .describe("Max seconds before killing the process (default 720)"),
+          allow_fallback: tool.schema
             .boolean()
-            .default(true)
+            .optional()
             .describe("If true, automatically try alternative CLIs when the primary fails"),
-        }),
+        },
         execute: async (params) => {
           await detectionPromise
 
           const response = await executeWithResilience(
             resCtx,
-            params.cli,
-            params.prompt,
-            params.mode,
-            params.timeout_seconds,
-            params.allow_fallback,
+            params.cli as CliName,
+            params.prompt as string,
+            (params.mode as "generate" | "analyze") ?? "generate",
+            (params.timeout_seconds as number) ?? 720,
+            (params.allow_fallback as boolean) ?? true,
           )
 
-          return {
+          return JSON.stringify({
             ...response,
             stdout: truncate(response.stdout, 50_000),
             stderr: redactSecrets(truncate(response.stderr, 5_000)),
             error: response.error ? redactSecrets(response.error) : null,
-          }
+          })
         },
       }),
 
-      tool({
-        name: "cli_status",
+      cli_status: tool({
         description:
           "Check the health and availability of all external CLI providers. " +
           "Shows installation status, circuit breaker state, and usage statistics.",
-        parameters: z.object({}),
+        args: {},
         execute: async () => {
           await detectionPromise
 
@@ -197,7 +191,7 @@ Rules: One concern per call. Split large requests. Include "CLI Consultations" i
             }
           })
 
-          return {
+          return JSON.stringify({
             platform: PLATFORM,
             detection_complete: detectionDone,
             retry_config: {
@@ -210,23 +204,20 @@ Rules: One concern per call. Split large requests. Include "CLI Consultations" i
               cooldown_seconds: DEFAULT_BREAKER_CONFIG.cooldownMs / 1000,
             },
             providers,
-          }
+          })
         },
       }),
-    ],
+    },
 
     hooks: {
-      "experimental.chat.system.transform": (input: any) => {
+      "experimental.chat.system.transform": async (input: any, output: any) => {
         const agent = input.agent ?? "unknown"
-        if (NO_CLI_AGENTS.has(agent)) return input
-        return {
-          ...input,
-          content: (input.content ?? "") + buildCliReminder(),
-        }
+        if (NO_CLI_AGENTS.has(agent)) return
+        output.system.push(buildCliReminder())
       },
 
-      "tool.execute.after": (input: any) => {
-        if (input.tool !== "bash") return input
+      "tool.execute.after": async (input: any) => {
+        if (input.tool !== "bash") return
         const cmd = String(input.args?.command ?? "")
 
         for (const name of ALL_CLI_NAMES) {
@@ -236,8 +227,6 @@ Rules: One concern per call. Split large requests. Include "CLI Consultations" i
             stats.calls++
           }
         }
-
-        return input
       },
     },
   }
