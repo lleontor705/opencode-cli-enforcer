@@ -7,7 +7,17 @@ on:
     branches: [develop, main]
 
 jobs:
-  test:
+  quality:
+    uses: lleontor705/ats-deploy/.github/workflows/quality-node.yml@main
+    with:
+      node-version: "22"
+      package-manager: "bun"
+      test-command: "bun test"
+
+  security:
+    uses: lleontor705/ats-deploy/.github/workflows/security-scan.yml@main
+
+  test-matrix:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
