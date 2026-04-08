@@ -63,8 +63,13 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           npm version "${TAG#v}" --no-git-tag-version --allow-same-version
+      - name: Clean and build
+        run: |
+          bun run clean
+          bun run build
+          bun test
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       - name: Create tag and release
