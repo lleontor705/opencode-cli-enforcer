@@ -7,7 +7,8 @@
   "module": "./dist/index.js",
   "exports": {
     ".": {
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "keywords": [
@@ -46,16 +47,22 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@release-it/bumper": "^7.0.5",
     "@types/bun": "latest",
+    "release-it": "^19.2.4",
     "typescript": "^5.7.0"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist --target bun",
+    "build": "bun build ./src/index.ts --outdir dist --target bun && bun x tsc --emitDeclarationOnly --outDir dist",
     "dev": "bun --watch src/index.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "typecheck": "bun build src/index.ts --no-bundle --outdir /dev/null",
+    "typecheck": "bun x tsc --noEmit",
     "prepublishOnly": "npm run build && npm test",
-    "clean": "node -e \"require('fs').rmSync('dist', {recursive:true, force:true})\""
+    "clean": "node -e \"require('fs').rmSync('dist', {recursive:true, force:true})\"",
+    "release": "release-it",
+    "release:patch": "release-it patch --ci",
+    "release:minor": "release-it minor --ci",
+    "release:major": "release-it major --ci"
   }
 }
