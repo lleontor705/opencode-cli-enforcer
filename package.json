@@ -5,9 +5,11 @@
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "keywords": [
@@ -47,15 +49,17 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/node": "^25.6.0",
+    "tsup": "^8.5.1",
     "typescript": "^5.7.0"
   },
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist --target bun",
+    "build": "tsup",
     "dev": "bun --watch src/index.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "typecheck": "bun build src/index.ts --no-bundle --outdir /dev/null",
+    "typecheck": "tsup --dts-only",
     "prepublishOnly": "npm run build && npm test",
-    "clean": "node -e \"require('fs').rmSync('dist', {recursive:true, force:true})\""
+    "clean": "tsup --clean"
   }
 }
