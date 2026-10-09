@@ -4,56 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-OpenCode CLI Enforcer — an OpenCode plugin that orchestrates Claude, Gemini, and Codex CLIs with resilience (circuit breakers, retry with backoff, automatic fallback). Published to npm as `opencode-cli-enforcer`.
+`opencode-cli-enforcer` is an **OpenCode v2 plugin** that registers CLI-backed model providers so users
+can generate text with existing subscriptions instead of API keys. It ships two providers:
+
+- **`claude-bridge`** — Claude Code via `@anthropic-ai/claude-agent-sdk`.
+- **`agy`** — Google Antigravity CLI, driven headless over its stream-json protocol.
+
+The core principle is separation of duties: OpenCode remains the sole tool executor and the owner of
+session history, permissions, and compaction. A backend CLI only *requests* tools; every request is
+routed back to the OpenCode host. Published to npm as `opencode-cli-enforcer`. MIT licensed.
+
+`README.md` is the normative source for install, quick start, operator actions, and capability
+matrices. `docs/config.md` is the normative source for the configuration reference and the
+per-provider acknowledgment gate. Keep both in sync with behavior.
 
 ## Commands
 
 ```bash
-bun install              # Install dependencies
-bun test                 # Run all tests
-bun test --watch         # Run tests in watch mode
-bun test tests/retry.test.ts  # Run a single test file
-bun run typecheck        # Type-check without emitting
-bun run build            # Build (no bundle)
+npm install                                   # Install dependencies
+node --import tsx --test "tests/**/*.test.ts" # Run the unit test suite
+npx tsc --noEmit                              # Type-check without emitting
 ```
 
-Runtime is **Bun** (>=1.3.5), not Node. Tests use Bun's built-in test runner (`bun:test`). There is no linter or formatter configured.
+Runtime is **Node.js >= 20** (ESM-only, `"type": "module"`); tests use the built-in `node:test`
+runner over `tsx`. There is no linter or formatter configured — `tsc --noEmit` plus the test suites
+are the quality gates. Integration suites are opt-in via environment gates
+(`CLAUDE_BRIDGE_INTEGRATION`, `AGY_BRIDGE_INTEGRATION`) and self-skip when unset.
 
 ## Architecture
 
-The plugin exports four tools (`cli_exec`, `cli_status`, `cli_list`, `cli_route`) via the OpenCode plugin interface.
+Everything provider-specific lives behind seven provider-agnostic seams (`src/provider/seams.ts`), so
+the second provider is a configuration-level addition rather than a second code path.
 
-**Request flow through `cli_exec`:**
+| Path | Responsibility |
+|---|---|
+| `src/index.ts` | Plugin entry: `Plugin.define`, setup, provider registration. |
+| `src/provider/` | Provider-agnostic seams, registry, registration, model catalog, language-model adapter, prompt stream, query lifecycle/state, host tool delivery. |
+| `src/stream/` | Native-event → normalized `TurnResult` mapping and stream conversion. |
+| `src/session/` | Conversation mirror (REUSE/REBUILD), isolated compaction lane, attachments, mirror I/O and post-write verification. |
+| `src/mcp/` | In-process MCP server and order-tolerant `tool_use`/result rendezvous. |
+| `src/errors/` | Closed error taxonomy, sendable-prompt assertion, single teardown path. |
+| `src/config/` | Configuration schema and fail-closed validation. |
+| `src/agy/` | Google Antigravity provider: transport, event mapper, probe, session store, host-tool loopback runner. |
 
-```
-index.ts (plugin entry, tool definitions, hooks)
-  → resilience.ts (global time budget, retry + circuit breaker + fallback)
-    → circuit-breaker.ts (per-CLI isolation: 3 failures OR 5 timeouts → open)
-    → retry.ts (exponential backoff with jitter, abort-aware sleep)
-    → executor.ts (execa wrapper: structured results, Windows .cmd handling, PATH augmentation)
-      → cli-defs.ts (arg builders + dynamic --max-turns for Claude)
-      → detection.ts (CLI availability via which/where, 5-min cache)
-      → safe-env.ts (allowlisted env vars only, no API keys)
-      → redact.ts (strips API keys from output)
-      → error-classifier.ts (transient/rate_limit/permanent/crash)
-```
-
-**Key state in `index.ts`:** three `Map`s — `breakers` (circuit breaker per CLI), `cliAvailability` (detection results), `usageStats` (call counts/timing). CLI detection runs non-blocking at startup via `Promise.allSettled`.
-
-**Global time budget** (`resilience.ts`): a single timeout budget shared across all retries AND fallbacks, preventing timeout multiplication. Process timeouts skip retries and go straight to fallback.
-
-**Circuit breaker** has separate thresholds: opens after 3 failures OR 5 timeouts (slow ≠ broken), cooldown 60s. **Retry**: max 2 retries, 1s base delay, 10s max, 0.3 jitter factor.
-
-**Role-based routing** (`cli-defs.ts`): 6 agent roles (manager, coordinator, developer, researcher, reviewer, architect) map to optimal CLI providers via `cli_route`.
-
-## Cross-Platform
-
-- `platform.ts` exports `PLATFORM` and `IS_WINDOWS`
-- Binary detection uses `which` (Unix) / `where` (Windows) with 5-minute cache
-- Windows: `.cmd/.bat` shim handling via `cmd /c`, PATH augmentation (npm, scoop, cargo, pnpm)
-- Large prompts (>30KB) delivered via stdin to avoid OS arg-length limits
-- CI runs on ubuntu, windows, and macos
+Key behaviors (mirror transitions, parked query + in-process MCP handshake, compaction lane, error
+taxonomy, teardown/leak assertions) are described in the README's architecture overview.
 
 ## Release
 
-The release workflow (`.github/workflows/release.yml`) requires a production environment approval gate, publishes to npm with provenance attestation using Node 22, and creates a GitHub release with a git tag.
+The release workflow (`.github/workflows/release.yml`) requires a production environment approval
+gate, publishes to npm with provenance attestation, and creates a GitHub release with a git tag.

@@ -4,14 +4,9 @@
 # There is no linter by design; `tsc --noEmit` plus the node:test suites are the
 # quality gates, so the Lint step only records that fact.
 #
-# Unit-test invocation note: the Node test runner only gained glob support in
-# Node 21, so the pattern is left UNQUOTED and expanded by the shell. A quoted
-# `tests/**/*.test.ts` is passed verbatim to `node --test`, which fails on Node
-# 20 with "Could not find". This also sidesteps the package.json `test` script
-# (`node --test tests`), which fails on Node 24 with ERR_UNSUPPORTED_DIR_IMPORT.
-# package.json is intentionally untouched by this change; operator action is to
-# replace that script with an explicit pattern such as
-# `node --import tsx --test tests/*/*.test.ts`.
+# Unit tests run via the explicit glob `node --import tsx --test tests/**/*.test.ts`,
+# matching the package.json `test` script; the pattern is left UNQUOTED so the
+# shell expands it on Node 20, where `node --test` has no built-in glob support.
 #
 # exFAT/AppleDouble `._*` sidecars end in `.test.ts` too and would be matched by
 # the unit glob on exFAT checkouts, so they are purged before discovery.
