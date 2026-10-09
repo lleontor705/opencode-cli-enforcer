@@ -1,5 +1,14 @@
 node_modules/
 dist/
 *.log
+
+# macOS
 .DS_Store
+._*
+
+# Cortex-IA local work authority state (never committed)
+/.cortex-ia/
+
+# Bun lockfiles are stale; this repo is npm-based (package-lock.json is canonical)
+bun.lock
 bun.lockb

@@ -1,30 +1,22 @@
 {
   "name": "opencode-cli-enforcer",
   "version": "1.0.1",
-  "description": "OpenCode plugin for resilient multi-LLM CLI orchestration (Claude, Gemini, Codex) with circuit breaker, retry, fallback, and cross-platform support",
+  "description": "OpenCode v2 plugin bridging Claude Code as a first-class model provider via the Claude Agent SDK",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "exports": {
-    ".": {
-      "import": "./dist/index.js"
-    }
+    ".": "./src/index.ts"
   },
   "keywords": [
     "opencode",
     "opencode-plugin",
-    "cli",
-    "llm",
-    "multi-llm",
+    "plugin",
     "claude",
-    "gemini",
-    "codex",
-    "circuit-breaker",
-    "orchestration"
+    "claude-code",
+    "claude-agent-sdk",
+    "provider"
   ],
   "engines": {
-    "bun": ">=1.3.5",
-    "node": ">=18.0.0"
+    "node": ">=20"
   },
   "license": "MIT",
   "publishConfig": {
@@ -36,26 +28,23 @@
     "url": "https://github.com/lleontor705/opencode-cli-enforcer.git"
   },
   "files": [
-    "dist",
+    "src",
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/**/*.test.ts"
+  },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.2.26",
-    "execa": "^9.6.1",
-    "zod": "^3.23.0"
+    "@anthropic-ai/claude-agent-sdk": "^0.3.293",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@opencode/plugin": "^2.0.26",
+    "cc-session-io": "^0.4.0"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/node": "^24.13.2",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.0"
-  },
-  "scripts": {
-    "build": "bun build ./src/index.ts --outdir dist --target bun",
-    "dev": "bun --watch src/index.ts",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
-    "typecheck": "bun build src/index.ts --no-bundle --outdir /dev/null",
-    "prepublishOnly": "npm run build && npm test",
-    "clean": "node -e \"require('fs').rmSync('dist', {recursive:true, force:true})\""
   }
 }
