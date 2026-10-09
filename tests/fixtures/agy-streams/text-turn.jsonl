@@ -1,0 +1,6 @@
+{"fixture":"agy-stream","schemaVersion":1,"name":"text-turn","source":"hand-authored","description":"single text turn: init -> step_update(text deltas) -> result (schema v1)","recordedAt":"2026-10-09T00:00:00.000Z","agyVersion":"1.3.2"}
+{"event":"init","conversation_id":"0f6c2f0e-1b7a-4a1c-9d1e-2f3a4b5c6d7e","init":{"tools":[],"permission_mode":"request-review","model":"gemini-3.8-flash-medium"}}
+{"event":"step_update","step_update":{"conversation_id":"0f6c2f0e-1b7a-4a1c-9d1e-2f3a4b5c6d7e","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"0f6c2f0e-1b7a-4a1c-9d1e-2f3a4b5c6d7e","step_index":1,"state":"ACTIVE","step_type":"agent_response","text_delta":"Hello"}}
+{"event":"step_update","step_update":{"conversation_id":"0f6c2f0e-1b7a-4a1c-9d1e-2f3a4b5c6d7e","step_index":1,"state":"DONE","step_type":"agent_response","text_delta":" world","usage":{"input_tokens":120,"output_tokens":12,"cache_read_tokens":0}}}
+{"event":"result","result":{"conversation_id":"0f6c2f0e-1b7a-4a1c-9d1e-2f3a4b5c6d7e","status":"SUCCESS","response":"Hello world","duration_seconds":1.2,"num_turns":1,"usage":{"input_tokens":120,"output_tokens":12,"cache_read_tokens":0,"total_tokens":132}}}

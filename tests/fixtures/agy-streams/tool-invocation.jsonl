@@ -1,0 +1,7 @@
+{"fixture":"agy-stream","schemaVersion":1,"name":"tool-invocation","source":"hand-authored","description":"one tool step: whole tool_info call at DONE (no partial input stream), schema v1","recordedAt":"2026-10-09T00:00:00.000Z","agyVersion":"1.3.2"}
+{"event":"init","conversation_id":"5a7b1c9d-2e3f-4a5b-8c6d-7e8f9a0b1c2d","init":{"tools":["run_command","write_to_file"],"permission_mode":"request-review","model":"gemini-3.8-flash-medium"}}
+{"event":"step_update","step_update":{"conversation_id":"5a7b1c9d-2e3f-4a5b-8c6d-7e8f9a0b1c2d","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"5a7b1c9d-2e3f-4a5b-8c6d-7e8f9a0b1c2d","step_index":1,"state":"ACTIVE","step_type":"tool","tool_name":"run_command"}}
+{"event":"step_update","step_update":{"conversation_id":"5a7b1c9d-2e3f-4a5b-8c6d-7e8f9a0b1c2d","step_index":1,"state":"DONE","step_type":"tool","tool_name":"run_command","tool_info":{"name":"run_command","parameters":{"CommandLine":"echo hello_headless_demo"},"output":"hello_headless_demo\r\n"},"usage":{"input_tokens":80,"output_tokens":6}}}
+{"event":"step_update","step_update":{"conversation_id":"5a7b1c9d-2e3f-4a5b-8c6d-7e8f9a0b1c2d","step_index":2,"state":"DONE","step_type":"agent_response","text_delta":"done"}}
+{"event":"result","result":{"conversation_id":"5a7b1c9d-2e3f-4a5b-8c6d-7e8f9a0b1c2d","status":"SUCCESS","response":"done","duration_seconds":2.4,"num_turns":1,"usage":{"input_tokens":200,"output_tokens":30,"cache_read_tokens":150,"total_tokens":380}}}
