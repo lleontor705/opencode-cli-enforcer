@@ -1,22 +1,96 @@
+# CI for opencode-cli-enforcer (the OpenCode v2 claude-bridge plugin).
+#
+# Gates: install -> typecheck -> unit tests -> (variable-gated) integration.
+# There is no linter by design; `tsc --noEmit` plus the node:test suites are the
+# quality gates, so the Lint step only records that fact.
+#
+# Unit-test invocation note: the Node test runner only gained glob support in
+# Node 21, so the pattern is left UNQUOTED and expanded by the shell. A quoted
+# `tests/**/*.test.ts` is passed verbatim to `node --test`, which fails on Node
+# 20 with "Could not find". This also sidesteps the package.json `test` script
+# (`node --test tests`), which fails on Node 24 with ERR_UNSUPPORTED_DIR_IMPORT.
+# package.json is intentionally untouched by this change; operator action is to
+# replace that script with an explicit pattern such as
+# `node --import tsx --test tests/*/*.test.ts`.
+#
+# exFAT/AppleDouble `._*` sidecars end in `.test.ts` too and would be matched by
+# the unit glob on exFAT checkouts, so they are purged before discovery.
+#
+# Integration suites are safe by construction: the job runs only when the
+# repository variable CLAUDE_BRIDGE_INTEGRATION == '1' so forks skip cleanly, and
+# each suite self-skips its real-CLI tier (exit 0) when no authenticated `claude`
+# binary is present.
+
 name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [develop, master]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    name: Test (${{ matrix.os }})
+    name: Test (node ${{ matrix.node-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
-      - run: bun install
-      - run: bun test
+          node-version: ${{ matrix.node-version }}
+      - name: Purge AppleDouble sidecars
+        run: |
+          find tests -name '._*' -type f -delete
+          find tests -name '.DS_Store' -type f -delete
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json present -> npm ci"
+            npm ci
+          else
+            echo "package-lock.json not tracked -> npm install"
+            npm install
+          fi
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint
+        run: echo "No linter is configured by design; typecheck and tests are the gates."
+      - name: Unit tests
+        run: node --import tsx --test tests/**/*.test.ts
+
+  integration:
+    name: Integration (real claude CLI)
+    # Gated on a repository variable so forks/clones without it skip cleanly and
+    # the pipeline stays green.
+    if: ${{ vars.CLAUDE_BRIDGE_INTEGRATION == '1' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Purge AppleDouble sidecars
+        run: |
+          find tests -name '._*' -type f -delete
+          find tests -name '.DS_Store' -type f -delete
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json present -> npm ci"
+            npm ci
+          else
+            echo "package-lock.json not tracked -> npm install"
+            npm install
+          fi
+      - name: Integration suites (self-skip without a usable claude CLI)
+        env:
+          CLAUDE_BRIDGE_INTEGRATION: "1"
+        run: node --import tsx --test tests/int-bridge.mjs tests/int-session-mirror.mjs

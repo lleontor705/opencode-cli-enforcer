@@ -1,316 +1,303 @@
 /**
- * opencode-cli-enforcer — OpenCode plugin
+ * OpenCode v2 plugin entry: Wave A wiring hub
+ * (REQ-CB-CFG-001, REQ-CB-PROV-001/002, REQ-CB-CMPR-001, REQ-CB-ERR-001; design D1/D8/D9).
  *
- * Resilient multi-LLM CLI orchestration with cross-platform support,
- * circuit breaker, retry with backoff, and automatic fallback.
+ * This module owns the plugin-lifetime objects shared across sessions — the
+ * per-session rendezvous scopes (cb-06/cb-28), the mirror registry (cb-09) and
+ * the live-query ledger (cb-14) — and installs each building block into its host
+ * seam exactly once.
+ * It holds no provider logic: generation is the LanguageModelV3 adapter (cb-12),
+ * compaction is the isolated summarizer lane (cb-13) and teardown is cb-14.
  *
- * Tools exposed:
- *   cli_exec   — Execute a CLI with full resilience pipeline
- *   cli_status — Health check and observability dashboard
- *   cli_list   — List installed CLI providers
- *   cli_route  — Recommend best CLI by agent role
+ * Fail-closed ordering is load-bearing: `resolveConfig` runs before any seam is
+ * touched, so an invalid option set throws with nothing registered (REQ-CB-CFG-001).
  *
- * Hook:
- *   experimental.chat.system.transform — injects CLI availability into agent prompts
- *   tool.execute.after — tracks legacy bash CLI usage
+ * Hot-reload safety has two halves. The provider transform is independently
+ * idempotent (cb-05 guards `editor.add` with `editor.get`), and the returned
+ * cleanup disposes every registration so a reload that runs cleanup before
+ * re-entering `setup` never stacks hooks; a single latch makes cleanup
+ * re-entrant.
  */
 
-import type { Plugin } from "@opencode-ai/plugin"
-import { tool } from "@opencode-ai/plugin"
-import { z } from "zod"
+import { fileURLToPath } from "node:url";
 
-import { PLATFORM } from "./platform"
-import { CLI_DEFS, ALL_CLI_NAMES, AGENT_ROLES, ROLE_ROUTING, type CliName } from "./cli-defs"
-import { createBreaker, DEFAULT_BREAKER_CONFIG } from "./circuit-breaker"
-import { DEFAULT_RETRY_CONFIG } from "./retry"
-import { detectAllClis, type CliAvailability } from "./detection"
-import { truncate } from "./executor"
-import { executeWithResilience, type ResilienceContext, type UsageStats } from "./resilience"
-import { redactSecrets } from "./redact"
+import { Plugin } from "@opencode/plugin";
 
-// Agents that should NOT receive CLI injection
-const NO_CLI_AGENTS = new Set(["orchestrator", "task_decomposer"])
+import { AgyPermissionPolicy, AgyToolChannel } from "./agy/channel.js";
+import { startAgyHostBridge } from "./agy/runner.js";
+import type { AgyHostBridge } from "./agy/runner.js";
+import { resolveConfig } from "./config/schema.js";
+import type { ResolvedAgyConfig } from "./config/schema.js";
+import { createProviderRegistry } from "./provider/registry.js";
+import { registerClaudeBridge } from "./provider/registration.js";
+import type { Disposable } from "./provider/registration.js";
+import {
+  createClaudeBridgeLanguageModelFactory,
+  RendezvousScopes,
+  SESSION_ID_HEADER,
+} from "./provider/language-model.js";
+import type { ClaudeBridgeSpawn } from "./provider/language-model.js";
+import { CLAUDE_BRIDGE_PROVIDER_ID } from "./provider/models.js";
+import { MCP_SERVER_NAME } from "./provider/query-lifecycle.js";
+import type { QueryContext } from "./provider/query-state.js";
+import type { HostTool, HostToolResult } from "./provider/seams.js";
+import { MirrorRegistry } from "./session/mirror.js";
+import { registerCompactionHook } from "./session/compaction.js";
+import type { CompactionFailureReporter } from "./session/compaction.js";
+import { LiveQueries, reportLeaks, teardownQuery } from "./errors/teardown.js";
+import type { NotifyFn } from "./stream/mapping.js";
 
-export default ((ctx) => {
-  // ── State ──────────────────────────────────────────────────────────────
+/**
+ * Claude Code exposes every in-process MCP tool as `mcp__<server>__<name>`, but
+ * the host knows it by its bare name. Unknown names keep their own identity so a
+ * non-MCP frame is never renamed onto a tool the model was not served.
+ */
+const HOST_TOOL_PREFIX = `mcp__${MCP_SERVER_NAME}__`;
 
-  const breakers = new Map<CliName, ReturnType<typeof createBreaker>>()
-  for (const name of ALL_CLI_NAMES) breakers.set(name, createBreaker())
+function resolveHostToolName(name: string): string | undefined {
+  return name.startsWith(HOST_TOOL_PREFIX) ? name.slice(HOST_TOOL_PREFIX.length) : name;
+}
 
-  const cliAvailability = new Map<CliName, CliAvailability>()
-  const usageStats = new Map<CliName, UsageStats>()
-  for (const name of ALL_CLI_NAMES) usageStats.set(name, { calls: 0, failures: 0, totalMs: 0 })
-
-  // Non-blocking CLI detection at startup
-  let detectionDone = false
-  const detectionPromise = detectAllClis().then((results) => {
-    for (const [name, avail] of results) cliAvailability.set(name, avail)
-    detectionDone = true
-  })
-
-  // ── Resilience Context ─────────────────────────────────────────────────
-
-  const resCtx: ResilienceContext = {
-    breakers,
-    availability: cliAvailability,
-    usageStats,
-    platform: PLATFORM,
-    retryConfig: DEFAULT_RETRY_CONFIG,
-    breakerConfig: DEFAULT_BREAKER_CONFIG,
+/**
+ * Report lane/mapper warnings through a host notification sink when the surface
+ * exposes one; otherwise degrade to `console.warn`. The type only promises
+ * `event.subscribe`, so this stays an optional structural probe rather than a
+ * compile-time dependency.
+ */
+function createHostNotifier(ctx: Plugin.Context): NotifyFn {
+  const sink = ctx.event as unknown as {
+    notify?: (message: string, level: "warning" | "info") => void;
+  };
+  if (typeof sink.notify === "function") {
+    const notify = sink.notify.bind(sink);
+    return (message, level) => notify(message, level);
   }
+  return (message, level) => {
+    console.warn(`claude-bridge: [${level}] ${message}`);
+  };
+}
 
-  // ── Helpers ────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
+// agy host-tool runner wiring (REQ-CB-TOOL-001, REQ-CB-AGY-001; design D13)
+// ---------------------------------------------------------------------------
 
-  function getAvailableClis(): CliName[] {
-    return ALL_CLI_NAMES.filter((n) => {
-      const avail = cliAvailability.get(n)
-      return avail?.installed !== false
-    })
-  }
+/** The runner entrypoint agy spawns; resolved next to this plugin module. */
+const AGY_RUNNER_ENTRY = fileURLToPath(new URL("./agy/runner.ts", import.meta.url));
 
-  function buildCliReminder(): string {
-    const available = getAvailableClis()
-    const unavailable = ALL_CLI_NAMES.filter((n) => !available.includes(n))
+type RegisteredHostTool = Awaited<ReturnType<Plugin.Context["tool"]["list"]>>[number];
+type RegisteredHostToolContext = Parameters<RegisteredHostTool["execute"]>[1];
 
-    const rows = available
-      .map((name) => {
-        const def = CLI_DEFS[name]
-        const breaker = breakers.get(name)!
-        const health =
-          breaker.state === "closed" ? "OK" : breaker.state === "half-open" ? "RECOVERING" : "DOWN"
-        return `| ${name} | ${def.description} | ${def.strengths.join(", ")} | ${health} |`
-      })
-      .join("\n")
+interface AgyHostWiring {
+  readonly bridge: AgyHostBridge;
+  readonly channel: AgyToolChannel;
+  readonly runnerCommand: readonly string[];
+  dispose(): Promise<void>;
+}
 
-    const unavailableNote =
-      unavailable.length > 0
-        ? `\n> **Not installed:** ${unavailable.join(", ")} — install them to enable more providers.\n`
-        : ""
+/**
+ * Wire the agy host-tool path for an enabled provider: project OpenCode's
+ * registered tools into the cb-02 `HostTool` seam, build the cb-24 channel with
+ * the real runner command, and start the loopback bridge that serves it. When
+ * agy is disabled this is never called, so channel behavior stays the unchanged
+ * dry-run manifest.
+ *
+ * `allowUserLevelRegistration` remains false (cb-24 fail-closed): the manifest
+ * carries the real runner command, but the user-level agy config is only
+ * mutated under an explicit operator opt-in.
+ */
+async function startAgyHostWiring(
+  ctx: Plugin.Context,
+  agy: ResolvedAgyConfig,
+): Promise<AgyHostWiring> {
+  const bridge = await startAgyHostBridge();
+  const runnerCommand = [
+    process.execPath,
+    "--import",
+    "tsx",
+    AGY_RUNNER_ENTRY,
+    bridge.url,
+    bridge.token,
+  ];
 
-    return `
-## External CLI Tools (${PLATFORM})
-Use \`cli_exec\` to call external LLMs — it handles OS differences, timeout, retry, and automatic fallback.
-Use \`cli_status\` to check health and availability of all CLI providers.
-Use \`cli_list\` to see installed providers. Use \`cli_route\` for role-based CLI recommendations.
+  const channel = new AgyToolChannel({
+    permission: new AgyPermissionPolicy({
+      dangerouslySkipPermissionsConsent: agy.dangerouslySkipPermissionsConsent,
+    }),
+    allowUserLevelRegistration: false,
+    runnerCommand,
+  });
 
-| CLI | Description | Strengths | Health |
-|-----|-------------|-----------|--------|
-${rows}
-${unavailableNote}
-Features: auto-retry (${DEFAULT_RETRY_CONFIG.maxRetries}x with backoff), circuit breaker per CLI, fallback to next available provider, global time budget.
-Rules: One concern per call. Split large requests. Include "CLI Consultations" in output.
-`
-  }
-
-  // ── Tools ──────────────────────────────────────────────────────────────
+  const hostTools = (await ctx.tool.list()).map(toHostTool);
+  await channel.registerHostTools(hostTools);
+  await bridge.attach(channel);
 
   return {
-    tools: [
-      tool({
-        name: "cli_exec",
-        description:
-          "Execute an external CLI (claude, gemini, codex) with automatic OS detection, timeout, " +
-          "retry with exponential backoff, circuit breaker protection, and fallback to alternative providers. " +
-          "Uses a global time budget shared across all retries and fallbacks.",
-        parameters: z.object({
-          cli: z.enum(["claude", "gemini", "codex"]).describe("Primary CLI to invoke"),
-          prompt: z.string().min(1).max(100_000).describe("The prompt to send to the CLI"),
-          mode: z
-            .enum(["generate", "analyze"])
-            .default("generate")
-            .describe("'generate' = self-contained prompt; 'analyze' = allow file reads (Claude only)"),
-          timeout_seconds: z
-            .number()
-            .int()
-            .min(10)
-            .max(1800)
-            .default(720)
-            .describe("Global timeout budget in seconds (covers all retries and fallbacks)"),
-          allow_fallback: z
-            .boolean()
-            .default(true)
-            .describe("If true, automatically try alternative CLIs when the primary fails"),
-        }),
-        execute: async (params) => {
-          await detectionPromise
-
-          const response = await executeWithResilience(
-            resCtx,
-            params.cli,
-            params.prompt,
-            params.mode,
-            params.timeout_seconds,
-            params.allow_fallback,
-          )
-
-          return {
-            ...response,
-            stdout: truncate(response.stdout, 50_000),
-            stderr: redactSecrets(truncate(response.stderr, 5_000)),
-            error: response.error ? redactSecrets(response.error) : null,
-          }
-        },
-      }),
-
-      tool({
-        name: "cli_status",
-        description:
-          "Check the health and availability of all external CLI providers. " +
-          "Shows installation status, circuit breaker state, and usage statistics.",
-        parameters: z.object({}),
-        execute: async () => {
-          await detectionPromise
-
-          const providers = ALL_CLI_NAMES.map((name) => {
-            const def = CLI_DEFS[name]
-            const avail = cliAvailability.get(name)
-            const breaker = breakers.get(name)!
-            const stats = usageStats.get(name)!
-            const avgMs = stats.calls > 0 ? Math.round(stats.totalMs / stats.calls) : 0
-
-            return {
-              name,
-              description: def.description,
-              strengths: def.strengths,
-              installed: avail?.installed ?? "unknown",
-              path: avail?.path ?? null,
-              version: avail?.version ?? null,
-              circuit_breaker: {
-                state: breaker.state,
-                consecutive_failures: breaker.failures,
-                consecutive_timeouts: breaker.timeouts,
-                failure_threshold: DEFAULT_BREAKER_CONFIG.failureThreshold,
-                timeout_threshold: DEFAULT_BREAKER_CONFIG.timeoutThreshold,
-                cooldown_seconds: DEFAULT_BREAKER_CONFIG.cooldownMs / 1000,
-                opened_at: breaker.openedAt ? new Date(breaker.openedAt).toISOString() : null,
-                last_failure: breaker.lastFailure
-                  ? new Date(breaker.lastFailure).toISOString()
-                  : null,
-                last_success: breaker.lastSuccess
-                  ? new Date(breaker.lastSuccess).toISOString()
-                  : null,
-                total_executions: breaker.totalExecutions,
-                total_failures: breaker.totalFailures,
-                total_timeouts: breaker.totalTimeouts,
-              },
-              usage: {
-                total_calls: stats.calls,
-                total_failures: stats.failures,
-                success_rate:
-                  stats.calls > 0
-                    ? `${Math.round(((stats.calls - stats.failures) / stats.calls) * 100)}%`
-                    : "N/A",
-                avg_duration_ms: avgMs,
-              },
-              fallback_order: def.fallbackOrder,
-            }
-          })
-
-          return {
-            platform: PLATFORM,
-            detection_complete: detectionDone,
-            retry_config: {
-              max_retries: DEFAULT_RETRY_CONFIG.maxRetries,
-              base_delay_ms: DEFAULT_RETRY_CONFIG.baseDelayMs,
-              max_delay_ms: DEFAULT_RETRY_CONFIG.maxDelayMs,
-            },
-            breaker_config: {
-              failure_threshold: DEFAULT_BREAKER_CONFIG.failureThreshold,
-              timeout_threshold: DEFAULT_BREAKER_CONFIG.timeoutThreshold,
-              cooldown_seconds: DEFAULT_BREAKER_CONFIG.cooldownMs / 1000,
-            },
-            providers,
-          }
-        },
-      }),
-
-      tool({
-        name: "cli_list",
-        description: "List installed CLI providers with their paths, versions, and strengths.",
-        parameters: z.object({}),
-        execute: async () => {
-          await detectionPromise
-
-          const installed: { provider: CliName; path: string | null; version: string | null; strengths: string[] }[] = []
-          for (const name of ALL_CLI_NAMES) {
-            const avail = cliAvailability.get(name)
-            if (avail?.installed) {
-              installed.push({
-                provider: name,
-                path: avail.path,
-                version: avail.version,
-                strengths: CLI_DEFS[name].strengths,
-              })
-            }
-          }
-
-          return {
-            installed_count: installed.length,
-            providers: installed,
-          }
-        },
-      }),
-
-      tool({
-        name: "cli_route",
-        description:
-          "Suggest the best CLI for a task based on agent role. " +
-          "Returns recommended provider with reasoning and fallback chain.",
-        parameters: z.object({
-          role: z.enum(AGENT_ROLES).describe("Agent role (manager, coordinator, developer, researcher, reviewer, architect)"),
-          task_description: z.string().optional().describe("Brief task description for context"),
-        }),
-        execute: async ({ role, task_description }) => {
-          await detectionPromise
-
-          const routing = ROLE_ROUTING[role]
-          const chain = [routing.primary, ...routing.fallbacks] as CliName[]
-
-          const availability: Record<string, boolean> = {}
-          for (const provider of chain) {
-            const det = cliAvailability.get(provider)
-            const breaker = breakers.get(provider)!
-            availability[provider] = (det?.installed ?? false) && breaker.state !== "open"
-          }
-
-          const recommended = chain.find((p) => availability[p]) || routing.primary
-
-          return {
-            role,
-            task_description: task_description ?? null,
-            recommended_cli: recommended,
-            reasoning: `Role "${role}" maps to ${routing.primary} (${CLI_DEFS[routing.primary].strengths.join(", ")})${recommended !== routing.primary ? `. Falling back to ${recommended} because ${routing.primary} is unavailable.` : "."}`,
-            fallback_chain: chain,
-            availability,
-          }
-        },
-      }),
-    ],
-
-    hooks: {
-      "experimental.chat.system.transform": (input: any) => {
-        const agent = input.agent ?? "unknown"
-        if (NO_CLI_AGENTS.has(agent)) return input
-        return {
-          ...input,
-          content: (input.content ?? "") + buildCliReminder(),
-        }
-      },
-
-      "tool.execute.after": (input: any) => {
-        if (input.tool !== "bash") return input
-        const cmd = String(input.args?.command ?? "")
-
-        for (const name of ALL_CLI_NAMES) {
-          const def = CLI_DEFS[name]
-          if (cmd.includes(`${def.binary} `)) {
-            const stats = usageStats.get(name)!
-            stats.calls++
-          }
-        }
-
-        return input
-      },
+    bridge,
+    channel,
+    runnerCommand,
+    async dispose() {
+      await bridge.close();
     },
+  };
+}
+
+function toHostTool(tool: RegisteredHostTool): HostTool {
+  return {
+    descriptor: {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: toObjectInputSchema(tool.input),
+    },
+    call: (input) => callRegisteredHostTool(tool, input),
+  };
+}
+
+/**
+ * MCP requires an object-typed schema. OpenCode tools declared with a plain
+ * JSON Schema pass through verbatim; effect/StandardSchema inputs cannot be
+ * projected to JSON Schema without the provider schema library, so they degrade
+ * to an open object rather than fabricating property names.
+ */
+function toObjectInputSchema(input: unknown): Record<string, unknown> {
+  if (
+    typeof input === "object" &&
+    input !== null &&
+    (input as { type?: unknown }).type === "object"
+  ) {
+    return input as Record<string, unknown>;
   }
-}) satisfies Plugin
+  return { type: "object", additionalProperties: true };
+}
+
+async function callRegisteredHostTool(
+  tool: RegisteredHostTool,
+  input: unknown,
+): Promise<HostToolResult> {
+  try {
+    const result = await tool.execute(input, hostToolContext());
+    return renderHostToolResult(result);
+  } catch (error) {
+    return { content: error instanceof Error ? error.message : String(error), isError: true };
+  }
+}
+
+/**
+ * agy's tool calls arrive outside any OpenCode turn, so the execution context is
+ * synthesized: the bridge identity stands in for the session/agent/message ids
+ * the host tool records for telemetry. No OpenCode turn state is claimed.
+ */
+function hostToolContext(): RegisteredHostToolContext {
+  return {
+    sessionID: "agy-host-bridge" as RegisteredHostToolContext["sessionID"],
+    agent: "agy" as RegisteredHostToolContext["agent"],
+    messageID: "agy-host-bridge" as RegisteredHostToolContext["messageID"],
+    id: "agy-host-bridge" as RegisteredHostToolContext["id"],
+    signal: new AbortController().signal,
+    progress: async () => {},
+  };
+}
+
+function renderHostToolResult(result: { content?: unknown; output?: unknown }): HostToolResult {
+  const content = result.content;
+  if (typeof content === "string") return { content };
+  if (Array.isArray(content)) {
+    return { content: content.map(renderToolContentBlock).join("\n") };
+  }
+  return { content: result.output === undefined ? "" : JSON.stringify(result.output) };
+}
+
+function renderToolContentBlock(block: unknown): string {
+  if (typeof block === "object" && block !== null) {
+    const typed = block as { type?: unknown; text?: unknown };
+    if (typed.type === "text") return String(typed.text ?? "");
+  }
+  return JSON.stringify(block);
+}
+
+export default Plugin.define({
+  id: "claude-bridge",
+  async setup(ctx) {
+    const config = resolveConfig(ctx.options);
+
+    const rendezvousScopes = new RendezvousScopes();
+    const spawns = new Map<QueryContext, ClaudeBridgeSpawn>();
+    const mirrors = new MirrorRegistry();
+    const liveQueries = new LiveQueries();
+    const notify = createHostNotifier(ctx);
+    const reportFailure: CompactionFailureReporter = (error) =>
+      notify(`${error.code}: ${error.message}`, "warning");
+
+    const languageModelFactory = createClaudeBridgeLanguageModelFactory({
+      rendezvousScopes,
+      notify,
+      resolveToolName: resolveHostToolName,
+      childEnv: config.childEnv,
+      cwd: ctx.location.directory,
+      onSpawn: (spawn) => {
+        liveQueries.track(spawn.context);
+        spawns.set(spawn.context, spawn);
+      },
+    });
+
+    const { registrations } = await registerClaudeBridge(ctx, {
+      registry: createProviderRegistry(),
+      languageModelFactory,
+    });
+
+    const compactionRegistration = await registerCompactionHook(ctx, {
+      childEnv: config.childEnv,
+      cwd: ctx.location.directory,
+      reportFailure,
+    });
+
+    // Pin the session id onto the request headers so the adapter can bound its
+    // rendezvous to one session. `LanguageModelV3CallOptions` carries no typed
+    // session field; this header is the host's correlation channel.
+    const sessionHeaderRegistration = await ctx.session.hook(
+      "model.request",
+      (event) => {
+        event.headers[SESSION_ID_HEADER] = String(event.sessionID);
+      },
+      { providerID: CLAUDE_BRIDGE_PROVIDER_ID },
+    );
+
+    // agy is out-of-process: its host tools reach it through the loopback runner
+    // bridge. Disabled agy means no bridge, no runner command and no channel, so
+    // the dry-run manifest path is untouched.
+    const agyWiring = config.providers.agy.enabled
+      ? await startAgyHostWiring(ctx, config.providers.agy)
+      : null;
+
+    const disposables: readonly Disposable[] = [
+      ...registrations,
+      compactionRegistration,
+      sessionHeaderRegistration,
+    ];
+    let cleanup: Promise<void> | null = null;
+
+    return () => {
+      cleanup ??= (async () => {
+        await agyWiring?.dispose();
+        // The cb-14 contract: every live query tears down to zero leaks. Each
+        // context carries the session scope it parked under, so teardown
+        // releases only that session's handlers.
+        for (const context of liveQueries.snapshot()) {
+          const spawn = spawns.get(context) ?? null;
+          const rendezvous = spawn?.rendezvous ?? null;
+          teardownQuery({ context, rendezvous, mirror: mirrors, liveQueries });
+          spawns.delete(context);
+          reportLeaks("plugin cleanup", { context, rendezvous, liveQueries });
+        }
+        if (liveQueries.size !== 0) {
+          throw new Error(
+            `claude-bridge: plugin cleanup left ${liveQueries.size} live query context(s)`,
+          );
+        }
+        for (const disposable of [...disposables].reverse()) {
+          await disposable.dispose();
+        }
+      })();
+      return cleanup;
+    };
+  },
+});
