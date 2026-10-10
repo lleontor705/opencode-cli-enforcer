@@ -1,6 +1,6 @@
 {
   "name": "opencode-cli-enforcer",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "description": "OpenCode v2 plugin bridging Claude Code as a first-class model provider via the Claude Agent SDK",
   "type": "module",
   "exports": {
@@ -30,6 +30,7 @@
   "files": [
     "src",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
