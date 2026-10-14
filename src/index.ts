@@ -1,13 +1,15 @@
 /**
- * OpenCode v2 plugin entry: Wave A wiring hub
- * (REQ-CB-CFG-001, REQ-CB-PROV-001/002, REQ-CB-CMPR-001, REQ-CB-ERR-001; design D1/D8/D9).
+ * OpenCode v2 plugin entry: Wave A wiring hub with the agy (Wave B) provider
+ * registration (REQ-CB-CFG-001, REQ-CB-PROV-001/002, REQ-CB-CMPR-001,
+ * REQ-CB-ERR-001, REQ-CB-AGY-001; design D1/D8/D9/D11).
  *
  * This module owns the plugin-lifetime objects shared across sessions — the
  * per-session rendezvous scopes (cb-06/cb-28), the mirror registry (cb-09) and
  * the live-query ledger (cb-14) — and installs each building block into its host
  * seam exactly once.
  * It holds no provider logic: generation is the LanguageModelV3 adapter (cb-12),
- * compaction is the isolated summarizer lane (cb-13) and teardown is cb-14.
+ * the agy transport/mapper/store/channel aggregate is registered from its Wave B
+ * modules, compaction is the isolated summarizer lane (cb-13) and teardown is cb-14.
  *
  * Fail-closed ordering is load-bearing: `resolveConfig` runs before any seam is
  * touched, so an invalid option set throws with nothing registered (REQ-CB-CFG-001).
@@ -24,12 +26,17 @@ import { fileURLToPath } from "node:url";
 import { Plugin } from "@opencode/plugin";
 
 import { AgyPermissionPolicy, AgyToolChannel } from "./agy/channel.js";
+import { AgyEventMapper } from "./agy/event-mapper.js";
+import { createAgyLanguageModelFactory } from "./agy/language-model.js";
+import { AgyUsageBaselineLedger, registerAgyProvider } from "./agy/probe.js";
 import { startAgyHostBridge } from "./agy/runner.js";
 import type { AgyHostBridge } from "./agy/runner.js";
+import { AgySessionStore } from "./agy/session-store.js";
+import { AGY_TRANSPORT_DEFAULT_COMMAND, AgyTransport } from "./agy/transport.js";
 import { resolveConfig } from "./config/schema.js";
 import type { ResolvedAgyConfig } from "./config/schema.js";
 import { createProviderRegistry } from "./provider/registry.js";
-import { registerClaudeBridge } from "./provider/registration.js";
+import { bindLanguageModel, bindProviderEditor, registerClaudeBridge } from "./provider/registration.js";
 import type { Disposable } from "./provider/registration.js";
 import {
   createClaudeBridgeLanguageModelFactory,
@@ -139,6 +146,42 @@ async function startAgyHostWiring(
       await bridge.close();
     },
   };
+}
+
+/**
+ * Register the agy provider with the real Wave B bindings: cb-21 transport,
+ * cb-22 mapper, cb-23 session store, cb-24 channel and cb-25 usage ledger, plus
+ * the LanguageModelV3 factory that drives them. Catalog and `language` hook go
+ * through the same guarded cb-05 bindings claude-bridge uses (idempotent
+ * `editor.get` transform + providerID-scoped hook), so a hot-reload never stacks
+ * a second agy registration and the disposables join the cleanup latch.
+ */
+async function registerAgyBridge(
+  ctx: Plugin.Context,
+  wiring: AgyHostWiring,
+): Promise<readonly Disposable[]> {
+  const transport = new AgyTransport();
+  const eventMapper = new AgyEventMapper();
+  const sessions = new AgySessionStore();
+  const baselines = new AgyUsageBaselineLedger();
+  const languageModelFactory = createAgyLanguageModelFactory({
+    transport,
+    sessions,
+    usageBaselines: baselines,
+    command: AGY_TRANSPORT_DEFAULT_COMMAND,
+    cwd: ctx.location.directory,
+  });
+
+  const { catalog } = registerAgyProvider(createProviderRegistry(), {
+    transport,
+    eventMapper,
+    sessions,
+    tools: wiring.channel,
+    baselines,
+    languageModelFactory,
+  });
+
+  return [await bindProviderEditor(ctx, catalog), await bindLanguageModel(ctx, catalog)];
 }
 
 function toHostTool(tool: RegisteredHostTool): HostTool {
@@ -268,8 +311,15 @@ export default Plugin.define({
       ? await startAgyHostWiring(ctx, config.providers.agy)
       : null;
 
+    // Enabled agy also registers its provider catalog + LanguageModelV3 factory
+    // (transport/mapper/store/channel/probe bindings) through the same
+    // provider.transform and providerID-scoped `language` hook claude-bridge uses.
+    const agyRegistrations: readonly Disposable[] =
+      agyWiring === null ? [] : await registerAgyBridge(ctx, agyWiring);
+
     const disposables: readonly Disposable[] = [
       ...registrations,
+      ...agyRegistrations,
       compactionRegistration,
       sessionHeaderRegistration,
     ];

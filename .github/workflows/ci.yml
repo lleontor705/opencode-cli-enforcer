@@ -4,9 +4,10 @@
 # There is no linter by design; `tsc --noEmit` plus the node:test suites are the
 # quality gates, so the Lint step only records that fact.
 #
-# Unit tests run via the explicit glob `node --import tsx --test tests/**/*.test.ts`,
-# matching the package.json `test` script; the pattern is left UNQUOTED so the
-# shell expands it on Node 20, where `node --test` has no built-in glob support.
+# Unit tests run via the explicit glob `node --import tsx --test tests/**/*.test.ts`;
+# the pattern is left UNQUOTED so the shell expands it on Node 20, where
+# `node --test` has no built-in glob support. The package.json `test` script adds
+# the fixture-driven `tests/int-agy.mjs` suite to the same glob.
 #
 # exFAT/AppleDouble `._*` sidecars end in `.test.ts` too and would be matched by
 # the unit glob on exFAT checkouts, so they are purged before discovery.
@@ -14,7 +15,8 @@
 # Integration suites are safe by construction: the job runs only when the
 # repository variable CLAUDE_BRIDGE_INTEGRATION == '1' so forks skip cleanly, and
 # each suite self-skips its real-CLI tier (exit 0) when no authenticated `claude`
-# binary is present.
+# or `agy` binary is present. int-agy.mjs gates its real-CLI tier on
+# AGY_BRIDGE_INTEGRATION, so it always runs its fixture-driven on-disk tier here.
 
 name: CI
 
@@ -85,7 +87,7 @@ jobs:
             echo "package-lock.json not tracked -> npm install"
             npm install
           fi
-      - name: Integration suites (self-skip without a usable claude CLI)
+      - name: Integration suites (self-skip without a usable claude/agy CLI)
         env:
           CLAUDE_BRIDGE_INTEGRATION: "1"
-        run: node --import tsx --test tests/int-bridge.mjs tests/int-session-mirror.mjs
+        run: node --import tsx --test tests/int-bridge.mjs tests/int-session-mirror.mjs tests/int-agy.mjs
