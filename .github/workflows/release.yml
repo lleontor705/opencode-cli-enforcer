@@ -173,7 +173,14 @@ jobs:
           fs.writeFileSync("notes.md", notes + "\n");
           console.log("Release notes for " + version + " written to notes.md.");
           '
-      - name: Create GitHub release
+      - name: Create or adopt GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag sbom.cdx.json
+        run: |
+          if gh release view "$GITHUB_REF_NAME"; then
+            echo "Release $GITHUB_REF_NAME already exists; adopting it (upload SBOM, refresh notes)."
+            gh release upload "$GITHUB_REF_NAME" sbom.cdx.json --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag sbom.cdx.json
+          fi

@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-17
+
+### Added
+
+- **AI SDK provider package shim for the `agy` bridge.** The `agy` provider now advertises its
+  `package` field as an `aisdk:`-prefixed module (`src/agy/provider-package.mjs`) instead of the
+  nonexistent `antigravity-cli` npm package, so OpenCode takes its `aisdk:` loading path rather
+  than trying to install a package that does not exist. The shim's `createAgyProviderSdk`
+  factory returns a marker SDK that is never used for generation: the real `LanguageModelV3`
+  adapter is still supplied by the `ctx.aisdk.hook("language", ...)` registration in
+  `src/index.ts`, which overrides `event.language` before the marker is ever consulted.
+
 ## [3.0.0] - 2026-10-17
 
 ### Changed
