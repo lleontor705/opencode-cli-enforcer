@@ -81,7 +81,8 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           VERSION="${REF_NAME#v}"
-          if ! grep -qE "^## \[?v?${VERSION}\]?(\s|$)" CHANGELOG.md; then
+          VERSION_ESCAPED="${VERSION//./\\.}"
+          if ! grep -qE "^## \[?v?${VERSION_ESCAPED}\]?(\s|$|\()" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no '## [${VERSION}]' section. Document the release before pushing the tag."
             exit 1
           fi
@@ -159,7 +160,7 @@ jobs:
           const fs = require("node:fs");
           const version = process.env.REF_NAME.replace(/^v/, "");
           const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          const heading = new RegExp("^## \\[?" + escaped + "\\]?(\\s|$)|^## v?" + escaped + "(\\s|$)");
+          const heading = new RegExp("^## \\[?" + escaped + "\\]?(\\s|$|\\()|^## v?" + escaped + "(\\s|$|\\()");
           const lines = fs.readFileSync("CHANGELOG.md", "utf8").split(/\r?\n/);
           const from = lines.findIndex((line) => heading.test(line));
           if (from === -1) {
