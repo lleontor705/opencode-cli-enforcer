@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-16
+
 ### Changed
 
 - **Redesigned the CI/CD and supply-chain posture** around the npm publish path.
