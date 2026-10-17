@@ -1,0 +1,46 @@
+# Dependabot dependency hygiene for opencode-cli-enforcer.
+#
+# Two ecosystems are tracked: npm (the plugin's runtime and dev dependencies)
+# and github-actions (the workflow pins themselves). Keeping the Actions pins
+# fresh is what turns the SHA-pinned `uses:` entries into reviewable PRs instead
+# of silent staleness.
+#
+# Major npm bumps are deliberately kept OUT of the groups below: an ungrouped
+# major arrives as its own PR so breaking changes get individual review, while
+# minor+patch churn is batched into one development PR and one production PR.
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      npm-production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

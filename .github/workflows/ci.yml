@@ -4,6 +4,14 @@
 # There is no linter by design; `tsc --noEmit` plus the node:test suites are the
 # quality gates, so the Lint step only records that fact.
 #
+# Supply-chain hardening: every third-party action is pinned to a full 40-char
+# commit SHA (the trailing `# vX` comment is the readable ref) so a moved or
+# deleted tag cannot silently change what runs. The workflow declares a minimal
+# top-level `permissions: contents: read` and escalates only where a job needs
+# more, and `concurrency` cancels superseded runs on the same ref to bound runner
+# consumption. Every job carries an explicit `timeout-minutes` so a hung step
+# cannot hold a runner indefinitely.
+#
 # Unit tests run via the explicit glob `node --import tsx --test tests/**/*.test.ts`;
 # the pattern is left UNQUOTED so the shell expands it on Node 20, where
 # `node --test` has no built-in glob support. The package.json `test` script adds
@@ -17,6 +25,11 @@
 # each suite self-skips its real-CLI tier (exit 0) when no authenticated `claude`
 # or `agy` binary is present. int-agy.mjs gates its real-CLI tier on
 # AGY_BRIDGE_INTEGRATION, so it always runs its fixture-driven on-disk tier here.
+#
+# Pull requests additionally run the dependency-review gate: it inspects the
+# dependency diff and fails on high-or-worse severity advisories, posting a
+# summary comment only when the review fails so the PR timeline stays quiet on
+# clean diffs.
 
 name: CI
 
@@ -29,20 +42,26 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test (node ${{ matrix.node-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
         node-version: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ matrix.node-version }}
+          cache: npm
       - name: Purge AppleDouble sidecars
         run: |
           find tests -name '._*' -type f -delete
@@ -69,11 +88,13 @@ jobs:
     # the pipeline stays green.
     if: ${{ vars.CLAUDE_BRIDGE_INTEGRATION == '1' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
+          cache: npm
       - name: Purge AppleDouble sidecars
         run: |
           find tests -name '._*' -type f -delete
@@ -91,3 +112,19 @@ jobs:
         env:
           CLAUDE_BRIDGE_INTEGRATION: "1"
         run: node --import tsx --test tests/int-bridge.mjs tests/int-session-mirror.mjs tests/int-agy.mjs
+
+  dependency-review:
+    name: Dependency review (pull requests)
+    # Only pull requests carry a dependency diff to compare against the base.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
