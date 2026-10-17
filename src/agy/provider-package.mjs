@@ -22,11 +22,9 @@
  * `loadSDKFactory` (opencode core) imports this file directly via its `file://`
  * URL, so it must remain a plain, dependency-free ESM module.
  */
-export function createAgyProviderSdk(_options: unknown): {
-  languageModel: (modelId: string) => never
-} {
+export function createAgyProviderSdk(_options) {
   return {
-    languageModel: (_modelId: string): never => {
+    languageModel: (_modelId) => {
       throw new Error(
         "agy: the dummy SDK's languageModel was invoked; the LanguageModelV3 adapter must be supplied by the aisdk language hook",
       )
