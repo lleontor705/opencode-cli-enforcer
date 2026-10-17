@@ -52,5 +52,39 @@ taxonomy, teardown/leak assertions) are described in the README's architecture o
 
 ## Release
 
-The release workflow (`.github/workflows/release.yml`) requires a production environment approval
-gate, publishes to npm with provenance attestation, and creates a GitHub release with a git tag.
+Releases are tag-driven: pushing a `v*` tag runs `.github/workflows/release.yml`, which declares a
+read-only top-level token and a `concurrency` group (`release-${{ github.ref_name }}`) that never
+cancels a run in progress — an interrupted publish could leave npm and the git tag disagreeing.
+
+Three least-privilege stages run in order:
+
+| Stage | Purpose |
+|---|---|
+| `verify` | Refuses a tag that does not match the `package.json` version or that `CHANGELOG.md` does not document; typechecks, runs the unit suite, generates a CycloneDX SBOM from the lockfile (development dependencies omitted), and uploads it with 90-day retention. |
+| `publish` | Runs behind the `production` environment approval gate and publishes with `npm publish --provenance`. Trusted publishing is used when `vars.NPM_TRUSTED_PUBLISHING == '1'`; otherwise `secrets.NPM_TOKEN` is required and a missing token fails loud. |
+| `github-release` | Extracts the tag's `CHANGELOG.md` section (refusing empty notes) and creates the release with the preinstalled `gh` CLI, attaching the SBOM. |
+
+Budgets are 20 / 15 / 10 `timeout-minutes`; only `publish` holds `id-token: write` and only
+`github-release` holds `contents: write`.
+
+## CI/CD
+
+CI (`.github/workflows/ci.yml`) runs on pushes and pull requests to `main`; its `concurrency` group
+cancels superseded runs on the same ref.
+
+- `test` — `ubuntu-latest` + `macos-latest` matrix across Node `20`, `22`, and `24`; purges AppleDouble
+  `._*`/`.DS_Store` sidecars, installs with `npm ci` (falling back to `npm install`), typechecks, and
+  runs the unit suite. The `tests/**/*.test.ts` glob is left unquoted so the shell expands it on Node
+  20, where `node --test` has no built-in glob support; the Lint step is a no-op that records that
+  typecheck plus tests are the gates.
+- `integration` — gated on `vars.CLAUDE_BRIDGE_INTEGRATION == '1'` so forks skip cleanly; runs
+  `tests/int-bridge.mjs`, `tests/int-session-mirror.mjs`, and `tests/int-agy.mjs`.
+- `dependency-review` — pull requests only; fails on high-or-worse advisories and comments only when
+  the review fails.
+
+Governance: `.github/workflows/scorecard.yml` (OpenSSF Scorecard on branch-protection changes, a weekly
+cron, and pushes to `main`), `.github/workflows/codeql.yml` (`javascript-typescript` with the
+`security-extended` query suite), and `.github/dependabot.yml` (weekly npm and GitHub Actions updates,
+with minor and patch bumps grouped and major npm bumps left ungrouped for individual review). Every
+`uses:` in every workflow pins a full 40-character commit SHA with the upstream tag in a trailing
+comment. The README documents the full supply-chain posture.

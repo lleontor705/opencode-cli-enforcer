@@ -1,0 +1,56 @@
+# OpenSSF Scorecard supply-chain security analysis for opencode-cli-enforcer.
+#
+# `publish_results: true` sends the signed result set to the public OpenSSF
+# Scorecard API by exchanging the workflow's OIDC token, which is exactly why
+# this job requests `id-token: write`. Publishing only works because this
+# repository is public: a private repository cannot complete that OIDC exchange
+# and the publish step fails.
+#
+# Findings are emitted as SARIF so GitHub code scanning renders them, and a copy
+# is retained as a build artifact for post-hoc inspection.
+#
+# Every `uses:` is pinned to a full commit SHA with the human-readable tag in a
+# trailing comment, so a hijacked action tag cannot change what runs here.
+# Dependabot's github-actions ecosystem keeps those pins moving.
+
+name: Scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "27 3 * * 1"
+  push:
+    branches: [main]
+
+permissions: read-all
+
+concurrency:
+  group: "scorecard-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+      - uses: github/codeql-action/upload-sarif@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          sarif_file: results.sarif
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 14

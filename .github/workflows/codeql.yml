@@ -1,0 +1,46 @@
+# CodeQL static analysis for the plugin's TypeScript sources.
+#
+# `javascript-typescript` covers the whole language family and extracts directly
+# from source, so no build step is required. The `security-extended` query suite
+# is broader than the default, which is why this also runs on a weekly schedule
+# rather than only on main-branch push and pull-request activity.
+#
+# Every `uses:` is pinned to a full commit SHA with the tag in a trailing
+# comment; Dependabot's github-actions ecosystem keeps those pins moving.
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "16 4 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "codeql-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: github/codeql-action/init@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3
+        with:
+          category: "/language:javascript-typescript"

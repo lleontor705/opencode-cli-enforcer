@@ -5,6 +5,40 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Redesigned the CI/CD and supply-chain posture** around the npm publish path.
+  - Every `uses:` across all workflows is pinned to a full 40-character commit SHA with the upstream
+    tag in a trailing comment; Dependabot's `github-actions` ecosystem keeps those pins moving.
+  - Every workflow declares a read-only top-level permission grant and escalates per job. In the release
+    pipeline only the `publish` job requests `id-token: write` (npm provenance / OIDC trusted publishing)
+    and only the GitHub-release job requests `contents: write`; the Scorecard workflow separately
+    requests `id-token: write` for its own OIDC results publication.
+  - Every job carries an explicit `timeout-minutes`, and each workflow's `concurrency` group bounds
+    runner consumption by cancelling superseded runs (the release group never cancels a publish).
+  - Pull requests run `actions/dependency-review-action` and fail on high-or-worse severity advisories.
+  - The release pipeline is now three least-privilege stages — `verify`, `publish`, `github-release` —
+    behind a `production` environment approval gate, publishing with `npm publish --provenance`, with a
+    CycloneDX SBOM generated in `verify` and attached to the GitHub release, and release notes
+    extracted from this file that refuse to publish empty.
+
+### Added
+
+- **Dependency and vulnerability governance workflows**: OpenSSF Scorecard (branch-protection changes,
+  a weekly cron, and pushes to `main`; SARIF findings uploaded and retained 14 days), CodeQL for
+  `javascript-typescript` with the `security-extended` query suite, and weekly Dependabot updates for
+  the `npm` and `github-actions` ecosystems with grouped minor/patch bumps and ungrouped major npm
+  bumps.
+
+### Fixed
+
+- **Documentation drift**: `CLAUDE.md` described a release approval gate and a GitHub release that the
+  workflow did not previously implement, and said nothing about the CI gates or the governance
+  workflows. The release section now describes the pipeline that actually runs, the README documents
+  the supply-chain posture, and this entry records the change.
+
 ## [2.0.0] - 2026-10-10
 
 The plugin was rewritten from scratch as an **OpenCode v2 model-provider bridge**. This is a
