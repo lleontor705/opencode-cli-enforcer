@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-17
+
 ### Changed
 
 - **Renamed the plugin id to `cli-providers` and the Claude provider id to `claude`.** The plugin now
