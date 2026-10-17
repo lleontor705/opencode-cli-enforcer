@@ -1,9 +1,11 @@
 # Release pipeline for opencode-cli-enforcer (CD).
 #
-# Triggered by pushing a version tag (`v*`). Three least-privilege stages:
+# Triggered by pushing a version tag (`v*`). Tags are created by release-please
+# (release-please.yml) when a Release PR is merged; they are never pushed by
+# hand. Three least-privilege stages:
 #   verify           -> tag/version + changelog gates, typecheck, tests, CycloneDX SBOM
 #   publish          -> npm publish with provenance, gated by the `production` environment
-#   github-release   -> GitHub release for the tag, with the SBOM attached
+#   github-release   -> attaches the SBOM to the bot-created release (create only as a fallback)
 #
 # Only the `publish` job asks for `id-token: write` (OIDC provenance / trusted
 # publishing) and only `github-release` asks for `contents: write`. The top-level
@@ -11,10 +13,10 @@
 #
 # Every `uses:` is pinned to a full commit SHA. Pinning matters most on the publish
 # path: whatever runs there can reach the npm registry with a token, so a moved tag
-# or a compromised action release is a supply-chain incident. The GitHub release is
-# created with the preinstalled `gh` CLI rather than a third-party release action
-# for the same reason: one less artifact in the trusted set. Each SHA comment
-# records the upstream tag the pin corresponds to.
+# or a compromised action release is a supply-chain incident. The SBOM is attached
+# with the preinstalled `gh` CLI rather than a third-party release action for the
+# same reason: one less artifact in the trusted set. Each SHA comment records the
+# upstream tag the pin corresponds to.
 #
 # `concurrency.cancel-in-progress` is false on purpose: cancelling a run midway
 # through a publish can leave npm and the git tag in disagreeing states.
@@ -134,7 +136,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   github-release:
-    name: Create GitHub release
+    name: GitHub release (attach SBOM)
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -173,14 +175,14 @@ jobs:
           fs.writeFileSync("notes.md", notes + "\n");
           console.log("Release notes for " + version + " written to notes.md.");
           '
-      - name: Create or adopt GitHub release
+      - name: Attach SBOM to the release (create it only as a fallback)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "$GITHUB_REF_NAME"; then
-            echo "Release $GITHUB_REF_NAME already exists; adopting it (upload SBOM, refresh notes)."
+            echo "Release $GITHUB_REF_NAME already exists (created by release-please); attaching the SBOM and leaving its notes untouched."
             gh release upload "$GITHUB_REF_NAME" sbom.cdx.json --clobber
-            gh release edit "$GITHUB_REF_NAME" --notes-file notes.md
           else
+            echo "Release $GITHUB_REF_NAME does not exist; creating it from the changelog notes and attaching the SBOM."
             gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --verify-tag sbom.cdx.json
           fi

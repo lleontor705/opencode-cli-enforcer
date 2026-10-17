@@ -1,8 +1,10 @@
 # CI for opencode-cli-enforcer (the OpenCode v2 cli-providers plugin).
 #
 # Gates: install -> typecheck -> unit tests -> (variable-gated) integration.
-# There is no linter by design; `tsc --noEmit` plus the node:test suites are the
-# quality gates, so the Lint step only records that fact.
+# There is no code linter by design; `tsc --noEmit` plus the node:test suites are
+# the quality gates, so the Lint step only records that fact. Commit messages
+# ARE linted: the `commitlint` job enforces Conventional Commits, the convention
+# release-please parses to cut releases.
 #
 # Supply-chain hardening: every third-party action is pinned to a full 40-char
 # commit SHA (the trailing `# vX` comment is the readable ref) so a moved or
@@ -81,6 +83,35 @@ jobs:
         run: echo "No linter is configured by design; typecheck and tests are the gates."
       - name: Unit tests
         run: node --import tsx --test tests/**/*.test.ts
+
+  commitlint:
+    name: Commit message lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Full history: commitlint walks every commit in the lint range.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint commit messages
+        env:
+          RANGE_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}
+          RANGE_TO: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$RANGE_FROM" 2>/dev/null; then
+            npx commitlint --from "$RANGE_FROM" --to "$RANGE_TO"
+          else
+            echo "::warning::Range base $RANGE_FROM is not present in history (new or rewritten ref); linting only the head commit."
+            npx commitlint --last
+          fi
 
   integration:
     name: Integration (real claude CLI)

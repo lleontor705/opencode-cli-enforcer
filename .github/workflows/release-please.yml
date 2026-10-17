@@ -1,0 +1,62 @@
+# Release automation for opencode-cli-enforcer: release-please (Release-PR pattern).
+#
+# Every push to main makes release-please reconcile the Release PR: it collects
+# the Conventional Commits since the last release and opens or updates a
+# `chore(main): release X.Y.Z` pull request that bumps package.json,
+# package-lock.json, and CHANGELOG.md. Merging that PR makes the bot create the
+# `vX.Y.Z` tag and the GitHub release with the changelog notes; the tag push
+# then runs release.yml (verify -> publish -> SBOM attach).
+#
+# Tags and releases are NEVER created by hand (GitHub UI or otherwise): the bot
+# owns them so the version, changelog, tag, and release notes stay in lockstep.
+#
+# The bot must run with a personal access token (secrets.RELEASE_PLEASE_TOKEN,
+# fine-grained, Contents + Pull requests read/write). Tags created with the
+# built-in GITHUB_TOKEN do not trigger the tag-driven release.yml pipeline —
+# GitHub never starts workflows from GITHUB_TOKEN activity — so the PAT is a
+# hard requirement of the flow, and the preflight below fails loud when the
+# secret is missing instead of letting releases silently skip the publish.
+#
+# Supply-chain posture matches the repo standard: the action is pinned to a
+# full 40-character commit SHA (the trailing comment records the upstream tag),
+# and the token grant is the least privilege the bot needs — contents: write
+# (branch, tag, release) and pull-requests: write (Release PR), nothing more.
+#
+# `concurrency.cancel-in-progress` is false so a run is never cancelled halfway
+# through creating the Release PR or the release; the bot is idempotent, so a
+# superseded run simply re-reconciles on the next push.
+
+name: Release please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Reconcile release PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Token preflight (PAT required so the bot's tag triggers release.yml)
+        env:
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_PLEASE_TOKEN" ]; then
+            echo "::error::secrets.RELEASE_PLEASE_TOKEN is empty. release-please must run with a personal access token: tags created with the built-in GITHUB_TOKEN do not trigger the tag-driven release.yml pipeline. Create a fine-grained PAT with Contents (read/write) and Pull requests (read/write) for this repository and add it as the RELEASE_PLEASE_TOKEN secret."
+            exit 1
+          fi
+      # v4.4.1; `release-type: node` bumps package.json + package-lock.json +
+      # CHANGELOG.md and reads the package name from package.json.
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          release-type: node

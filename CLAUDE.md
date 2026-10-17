@@ -52,9 +52,21 @@ taxonomy, teardown/leak assertions) are described in the README's architecture o
 
 ## Release
 
-Releases are tag-driven: pushing a `v*` tag runs `.github/workflows/release.yml`, which declares a
-read-only top-level token and a `concurrency` group (`release-${{ github.ref_name }}`) that never
-cancels a run in progress — an interrupted publish could leave npm and the git tag disagreeing.
+Releases are automated by release-please (`.github/workflows/release-please.yml`), using the
+Release-PR pattern. Conventional Commits land on `main`; on every push the bot opens or updates a
+`chore(main): release X.Y.Z` pull request that bumps `package.json`, `package-lock.json`, and
+`CHANGELOG.md`. Merging that PR makes the bot create the `vX.Y.Z` tag and the GitHub release with
+the changelog notes. **Never create tags or releases by hand — not from the GitHub UI, not from the
+CLI**: the bot owns them so the version, changelog, tag, and release notes stay in lockstep.
+
+The bot runs with `secrets.RELEASE_PLEASE_TOKEN` (fine-grained PAT, Contents + Pull requests
+read/write). The PAT is required: tags created with the built-in `GITHUB_TOKEN` do not trigger
+workflows, so the tag-driven pipeline below would never run. A preflight step fails loud when the
+secret is missing.
+
+The tag push then runs `.github/workflows/release.yml`, which declares a read-only top-level token
+and a `concurrency` group (`release-${{ github.ref_name }}`) that never cancels a run in progress —
+an interrupted publish could leave npm and the git tag disagreeing.
 
 Three least-privilege stages run in order:
 
@@ -62,7 +74,7 @@ Three least-privilege stages run in order:
 |---|---|
 | `verify` | Refuses a tag that does not match the `package.json` version or that `CHANGELOG.md` does not document; typechecks, runs the unit suite, generates a CycloneDX SBOM from the lockfile (development dependencies omitted), and uploads it with 90-day retention. |
 | `publish` | Runs behind the `production` environment approval gate and publishes with `npm publish --provenance`. Trusted publishing is used when `vars.NPM_TRUSTED_PUBLISHING == '1'`; otherwise `secrets.NPM_TOKEN` is required and a missing token fails loud. |
-| `github-release` | Extracts the tag's `CHANGELOG.md` section (refusing empty notes) and creates the release with the preinstalled `gh` CLI, attaching the SBOM. |
+| `github-release` | Attaches the SBOM to the release-please-created release without touching the bot's notes; extracts the tag's `CHANGELOG.md` section (refusing empty notes) and creates the release with the preinstalled `gh` CLI only as a fallback. |
 
 Budgets are 20 / 15 / 10 `timeout-minutes`; only `publish` holds `id-token: write` and only
 `github-release` holds `contents: write`.
@@ -77,6 +89,9 @@ cancels superseded runs on the same ref.
   runs the unit suite. The `tests/**/*.test.ts` glob is left unquoted so the shell expands it on Node
   20, where `node --test` has no built-in glob support; the Lint step is a no-op that records that
   typecheck plus tests are the gates.
+- `commitlint` — lints every commit in the push or pull-request range against Conventional Commits
+  (`commitlint.config.mjs` extending `@commitlint/config-conventional`), the convention release-please
+  parses to cut releases; merge commits are ignored by commitlint's defaults.
 - `integration` — gated on `vars.CLAUDE_BRIDGE_INTEGRATION == '1'` so forks skip cleanly; runs
   `tests/int-bridge.mjs`, `tests/int-session-mirror.mjs`, and `tests/int-agy.mjs`.
 - `dependency-review` — pull requests only; fails on high-or-worse advisories and comments only when
