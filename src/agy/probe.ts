@@ -118,7 +118,7 @@ export function agyProviderInfo(): PluginProvider.Info {
   return {
     ...PluginProvider.Info.empty(AGY_PROVIDER_ID_BRAND),
     name: AGY_PROVIDER_NAME,
-    package: "antigravity-cli",
+    package: `aisdk:${new URL("./provider-package.mjs", import.meta.url).href}`,
   };
 }
 
