@@ -371,7 +371,7 @@ class AgyTurn {
     this.closeTextBlock();
     this.push({
       type: "error",
-      error: bridgeError("stream", "CB_STREAM_ABORTED", "claude-bridge: agy stream aborted by abortSignal"),
+      error: bridgeError("stream", "CB_STREAM_ABORTED", "cli-providers: agy stream aborted by abortSignal"),
     });
     const cli = this.cli;
     if (cli !== null) {
@@ -393,7 +393,7 @@ class AgyTurn {
           bridgeError(
             "transport",
             "CB_TRANSPORT_TRANSIENT",
-            `claude-bridge: agy turn produced no result within ${expiredMs} ms`,
+            `cli-providers: agy turn produced no result within ${expiredMs} ms`,
           ),
         ),
     });
@@ -510,7 +510,7 @@ function abortedStream(): ReadableStream<LanguageModelV3StreamPart> {
     start(controller) {
       controller.enqueue({
         type: "error",
-        error: bridgeError("stream", "CB_STREAM_ABORTED", "claude-bridge: agy request aborted before streaming"),
+        error: bridgeError("stream", "CB_STREAM_ABORTED", "cli-providers: agy request aborted before streaming"),
       });
       controller.close();
     },
@@ -592,21 +592,21 @@ function classifyDeadChild(mapping: ExitCodeMapping, stderr: string): ReturnType
     return bridgeError(
       "transport",
       "CB_TRANSPORT_FATAL_FRAME",
-      `claude-bridge: agy exited ${mapping.code} with no stream frame (fatal frame)${suffix}`,
+      `cli-providers: agy exited ${mapping.code} with no stream frame (fatal frame)${suffix}`,
     );
   }
   if (isAgyAuthFailure(stderr)) {
     return bridgeError(
       "transport",
       "CB_TRANSPORT_PROTOCOL",
-      `claude-bridge: agy authentication required (agy exited ${mapping.code} with no stream frame)${suffix}`,
+      `cli-providers: agy authentication required (agy exited ${mapping.code} with no stream frame)${suffix}`,
     );
   }
   const code = isBridgeErrorCode(mapping.kind) ? mapping.kind : "CB_TRANSPORT_PROTOCOL";
   return bridgeError(
     categoryOfCode(code),
     code,
-    `claude-bridge: agy exited ${mapping.code} with no stream frame${suffix}`,
+    `cli-providers: agy exited ${mapping.code} with no stream frame${suffix}`,
     { retryable: code === "CB_TRANSPORT_TRANSIENT" },
   );
 }

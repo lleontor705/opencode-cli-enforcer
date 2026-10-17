@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `opencode-cli-enforcer` is an **OpenCode v2 plugin** that registers CLI-backed model providers so users
 can generate text with existing subscriptions instead of API keys. It ships two providers:
 
-- **`claude-bridge`** — Claude Code via `@anthropic-ai/claude-agent-sdk`.
+- **`claude`** — Claude Code via `@anthropic-ai/claude-agent-sdk`.
 - **`agy`** — Google Antigravity CLI, driven headless over its stream-json protocol.
 
 The core principle is separation of duties: OpenCode remains the sole tool executor and the owner of

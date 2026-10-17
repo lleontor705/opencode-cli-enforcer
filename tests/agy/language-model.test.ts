@@ -601,7 +601,7 @@ test("TestREQ_CB_AGY_001_language_model_registration_is_idempotent_and_agy_scope
   assert.equal(language.modelId, agyModel.id);
 
   const claudeAttach: Record<string, unknown> = { model: { id: "claude-opus-4-7" }, sdk: {}, options: {} };
-  host.fire("language", claudeAttach, "claude-bridge");
+  host.fire("language", claudeAttach, "claude");
   assert.equal(claudeAttach.language, undefined, "the agy hook must not touch a non-agy model");
 });
 
@@ -716,7 +716,7 @@ test("TestREQ_CB_AGY_001_language_model_plugin_wiring_registers_agy_with_clean_t
   assert.equal(agyRecord.length, 1, "the agy provider must register exactly once across reloads");
   assert.equal(agyRecord[0].models.length, AGY_MODEL_SLUGS.length);
   assert.ok(
-    host.editor.records.some((record) => record.provider.id === "claude-bridge"),
+    host.editor.records.some((record) => record.provider.id === "claude"),
     "the Wave A clamp provider must still register with agy enabled",
   );
 

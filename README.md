@@ -19,9 +19,9 @@
 ## What this plugin is
 
 `opencode-cli-enforcer` is an **OpenCode v2 plugin** that registers Claude Code as a first-class model
-provider through `@anthropic-ai/claude-agent-sdk`. It publishes the provider id **`claude-bridge`**
+provider through `@anthropic-ai/claude-agent-sdk`. It publishes the provider id **`claude`**
 and a static catalog of Claude Code models, so a user with a Claude subscription can select
-`claude-bridge/*` models and generate text **without an `ANTHROPIC_API_KEY`** — authentication is
+`claude/*` models and generate text **without an `ANTHROPIC_API_KEY`** — authentication is
 delegated to the Claude Code CLI the SDK drives.
 
 The design principle is a strict separation of duties:
@@ -88,7 +88,7 @@ Or register a local checkout directly by path (useful for development):
 With no `options`, the plugin runs with safe defaults: the `claude` provider is enabled, the `agy`
 provider is disabled, and `defaultProvider` is `claude`. Restart OpenCode (or reload plugins) after
 editing `opencode.jsonc`. The plugin then registers via
-`Plugin.define({ id: "claude-bridge", setup })` and adds the provider and its model catalog through
+`Plugin.define({ id: "cli-providers", setup })` and adds the provider and its model catalog through
 `ctx.provider.transform`, idempotently (a hot reload never duplicates records).
 
 ## Quick start
@@ -96,7 +96,7 @@ editing `opencode.jsonc`. The plugin then registers via
 1. Install and authenticate the Claude Code CLI for your user (subscription login, no API key).
 2. Add the plugin entry shown above to `opencode.jsonc`.
 3. Restart OpenCode.
-4. Select a model from the **`claude-bridge`** provider, for example `claude-bridge/claude-sonnet-5`.
+4. Select a model from the **`claude`** provider, for example `claude/claude-sonnet-5`.
 5. Send a prompt. Tool calls made by the model are executed by OpenCode; approvals and permission
    prompts behave exactly as they do for any other provider.
 

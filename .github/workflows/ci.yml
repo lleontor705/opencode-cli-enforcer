@@ -1,4 +1,4 @@
-# CI for opencode-cli-enforcer (the OpenCode v2 claude-bridge plugin).
+# CI for opencode-cli-enforcer (the OpenCode v2 cli-providers plugin).
 #
 # Gates: install -> typecheck -> unit tests -> (variable-gated) integration.
 # There is no linter by design; `tsc --noEmit` plus the node:test suites are the

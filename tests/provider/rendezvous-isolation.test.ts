@@ -103,7 +103,7 @@ function makeLanguage(
   onSpawn?: (spawn: ClaudeBridgeSpawn) => void,
 ): LanguageModelV3 {
   const [model] = projectClaudeCodeModels();
-  assert.ok(model, "the catalog must expose at least one claude-bridge model");
+  assert.ok(model, "the catalog must expose at least one claude model");
   const factory = createClaudeBridgeLanguageModelFactory({
     spawnImpl: spawn,
     rendezvousScopes: scopes,
@@ -231,7 +231,7 @@ function compactionInput(): SessionCompaction {
   return {
     sessionID: "ses_compaction",
     agent: "build",
-    model: { providerID: "claude-bridge", modelID: "claude-sonnet-4" },
+    model: { providerID: "claude", modelID: "claude-sonnet-4" },
     system: [{ type: "text", text: "You are a coding assistant." }],
     messages: [
       { id: "m1", role: "user", content: [{ type: "text", text: "Implement the parser." }] },

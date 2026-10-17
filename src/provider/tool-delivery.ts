@@ -84,7 +84,7 @@ function textBlock(text: string): ToolTextContent {
 
 function classifier(toolCallId: string, toolName: string, message: string): ToolResult {
   const label = toolName.length > 0 ? `${toolName} [${toolCallId}]` : toolCallId;
-  const error = bridgeError("tool", "CB_TOOL_UNPAIRED_RESULT", `claude-bridge: ${message} ${label}`);
+  const error = bridgeError("tool", "CB_TOOL_UNPAIRED_RESULT", `cli-providers: ${message} ${label}`);
   return { content: [textBlock(error.message)], isError: true };
 }
 

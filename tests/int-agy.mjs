@@ -466,12 +466,12 @@ test("TestREQ_CB_AGY_001_int_agy_plugin_export_agy_wiring_and_zero_leak_cleanup"
   assert.equal(typeof cleanup, "function", "plugin.setup must return a cleanup");
 
   await host.reload();
-  const record = host.editor.get("claude-bridge");
+  const record = host.editor.get("claude");
   assert.ok(record, "the Wave A provider transform still registers with agy enabled");
 
   const [model] = record.models;
   const attach = { model, sdk: {}, options: {} };
-  host.fire("language", attach, "claude-bridge");
+  host.fire("language", attach, "claude");
   assert.equal(attach.language?.specificationVersion, "v3", "the claude adapter still attaches");
 
   // Zero-leak teardown, including the agy host-tool loopback wiring started above.

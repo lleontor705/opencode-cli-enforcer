@@ -5,7 +5,7 @@
  * child is ever spawned. Three contract points are covered here plus the
  * cb-08 STRM-001..003 fixtures replayed through the adapter:
  *
- * - a claude-bridge request streams from the SDK pump (never a native HTTP
+ * - a claude request streams from the SDK pump (never a native HTTP
  *   provider), abortSignal aborts the query and ends with an error part, and a
  *   foreign provider id never receives the custom language model;
  * - a tool-using step finishes at the SDK tool boundary so OpenCode can execute
@@ -99,7 +99,7 @@ function makeHarness(script: ClaudeRawEvent[], options: HarnessOptions = {}): Ha
     return query;
   };
   const [model] = projectClaudeCodeModels();
-  assert.ok(model, "the catalog must expose at least one claude-bridge model");
+  assert.ok(model, "the catalog must expose at least one claude model");
 
   const config: ClaudeBridgeLanguageModelConfig = {
     spawnImpl,
@@ -168,7 +168,7 @@ test("TestREQ_CB_PROV_002_language_model_v3_seam sources its stream from the SDK
   const { stream } = await harness.language.doStream({ prompt: userPrompt("hi") });
   const parts = await collectStream(stream);
 
-  assert.equal(harness.language.provider, "claude-bridge");
+  assert.equal(harness.language.provider, "claude");
   assert.equal(harness.language.specificationVersion, "v3");
   assert.equal(harness.language.modelId, harness.model.id);
   assert.equal(harness.queries.length, 1, "the stream must be sourced from the SDK query pump, not HTTP");
@@ -236,15 +236,15 @@ test("TestREQ_CB_PROV_002_language_model_v3_seam is scoped by providerID", async
 
   const languageHook = hooks.find((hook) => hook.name === "language");
   assert.ok(languageHook, "registerClaudeBridge must bind a language hook");
-  assert.deepEqual(languageHook.options, { providerID: "claude-bridge" });
+  assert.deepEqual(languageHook.options, { providerID: "claude" });
 
   const [model] = projectClaudeCodeModels();
   assert.ok(model);
 
   const bridgeInput: LanguageHookInput = { model, sdk: {}, options: {} };
-  fireLanguage(hooks, bridgeInput, "claude-bridge");
-  assert.ok(bridgeInput.language, "a claude-bridge request must receive the custom language model");
-  assert.equal(bridgeInput.language.provider, "claude-bridge");
+  fireLanguage(hooks, bridgeInput, "claude");
+  assert.ok(bridgeInput.language, "a claude request must receive the custom language model");
+  assert.equal(bridgeInput.language.provider, "claude");
   assert.equal(bridgeInput.language.specificationVersion, "v3");
 
   const foreignInput: LanguageHookInput = { model, sdk: {}, options: {} };

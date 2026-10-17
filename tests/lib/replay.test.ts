@@ -94,7 +94,7 @@ test("TestREQ_CB_STRM_001_text_turn_maps_to_lmv3_parts_with_usage", () => {
   const reasoningEnd = partsOfType(parts, "reasoning-end")[0] as {
     providerMetadata?: Record<string, Record<string, unknown>>;
   };
-  assert.equal(reasoningEnd.providerMetadata?.["claude-bridge"]?.signature, "sig-thinking-0001");
+  assert.equal(reasoningEnd.providerMetadata?.["claude"]?.signature, "sig-thinking-0001");
 
   assert.deepEqual(finishUsage(parts), toLanguageModelV3Usage(TEXT_TURN_USAGE));
   const finish = partsOfType(parts, "finish")[0] as { finishReason: { unified: string; raw: string } };

@@ -165,7 +165,7 @@ interface MappedBlock {
   [key: string]: unknown;
 }
 
-const PROVIDER_METADATA_KEY = "claude-bridge";
+const PROVIDER_METADATA_KEY = "claude";
 
 // ---------------------------------------------------------------------------
 // Renderer: normalized events -> LanguageModelV3 stream parts.
@@ -641,7 +641,7 @@ export class ClaudeEventMapper implements EventMapper<ClaudeRawEvent, Normalized
   private get turnOutput(): { stopReason: string } {
     const output = this.query.turnOutput;
     if (!output) {
-      throw bridgeError("stream", "CB_STREAM_MAPPING_FAILED", "claude-bridge: stream mapped before a turn was reset");
+      throw bridgeError("stream", "CB_STREAM_MAPPING_FAILED", "cli-providers: stream mapped before a turn was reset");
     }
     return output;
   }

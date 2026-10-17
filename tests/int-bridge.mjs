@@ -1,5 +1,5 @@
 /**
- * End-to-end integration oracle for the claude-bridge plugin (cb-17, spec pins
+ * End-to-end integration oracle for the cli-providers plugin (cb-17, spec pins
  * cortex:opencode-cli-enforcer#589/#592/#595/#600; REQ-CB-PROV-002,
  * REQ-CB-TOOL-002/004).
  *
@@ -77,7 +77,7 @@ const SKIP_REAL = REAL_CLI
 
 let armedScript = null;
 globalThis.__claudeBridgeTestQuery = (params) => {
-  if (armedScript === null) throw new Error("claude-bridge test: a query was spawned with no armed script");
+  if (armedScript === null) throw new Error("cli-providers test: a query was spawned with no armed script");
   armedScript.attachPrompt(params.prompt);
   return armedScript.handle;
 };
@@ -343,15 +343,15 @@ test("TestREQ_CB_PROV_002_int_bridge_plugin_wiring_and_zero_leak_cleanup", async
   assert.equal(typeof cleanup, "function", "plugin.setup must return a cleanup");
 
   await host.reload();
-  const record = host.editor.get("claude-bridge");
-  assert.ok(record, "the provider transform must register the claude-bridge provider");
+  const record = host.editor.get("claude");
+  assert.ok(record, "the provider transform must register the claude provider");
   assert.equal(record.provider.name, "Claude Code");
   assert.ok(record.models.length >= 1);
 
   await host.reload();
   await host.reload();
   assert.equal(
-    host.editor.list().filter((candidate) => candidate.provider.id === "claude-bridge").length,
+    host.editor.list().filter((candidate) => candidate.provider.id === "claude").length,
     1,
     "the provider transform must stay idempotent across re-entrant reloads",
   );
@@ -359,9 +359,9 @@ test("TestREQ_CB_PROV_002_int_bridge_plugin_wiring_and_zero_leak_cleanup", async
   const [model] = record.models;
   assert.ok(model);
   const attach = { model, sdk: {}, options: {} };
-  host.fire("language", attach, "claude-bridge");
-  assert.ok(attach.language, "a claude-bridge request must receive the custom adapter");
-  assert.equal(attach.language.provider, "claude-bridge");
+  host.fire("language", attach, "claude");
+  assert.ok(attach.language, "a claude request must receive the custom adapter");
+  assert.equal(attach.language.provider, "claude");
   assert.equal(attach.language.specificationVersion, "v3");
   assert.equal(typeof attach.language.doStream, "function");
 
@@ -370,7 +370,7 @@ test("TestREQ_CB_PROV_002_int_bridge_plugin_wiring_and_zero_leak_cleanup", async
   assert.equal(foreign.language, undefined, "a foreign provider id must never receive the adapter");
 
   const request = { sessionID: "ses-int-wiring", agent: "build", model, kind: "primary", headers: {} };
-  host.fire("model.request", request, "claude-bridge");
+  host.fire("model.request", request, "claude");
   assert.equal(
     request.headers[SESSION_ID_HEADER],
     "ses-int-wiring",
@@ -407,9 +407,9 @@ test(
     const cleanup = await plugin.setup(host.ctx);
     await host.reload();
 
-    const [model] = host.editor.get("claude-bridge").models;
+    const [model] = host.editor.get("claude").models;
     const attach = { model, sdk: {}, options: {} };
-    host.fire("language", attach, "claude-bridge");
+    host.fire("language", attach, "claude");
     const language = attach.language;
     const headers = { [SESSION_ID_HEADER]: "ses-int-fixture" };
 
@@ -508,9 +508,9 @@ test(
     const cleanup = await plugin.setup(host.ctx);
     await host.reload();
 
-    const [model] = host.editor.get("claude-bridge").models;
+    const [model] = host.editor.get("claude").models;
     const attach = { model, sdk: {}, options: {} };
-    host.fire("language", attach, "claude-bridge");
+    host.fire("language", attach, "claude");
     const language = attach.language;
     const headers = { [SESSION_ID_HEADER]: "ses-int-real-smoke" };
 

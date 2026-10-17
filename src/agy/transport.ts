@@ -199,7 +199,7 @@ function readContent(message: unknown): string {
 }
 
 function fatalFrame(message: string): ReturnType<typeof bridgeError> {
-  return bridgeError("transport", "CB_TRANSPORT_FATAL_FRAME", `claude-bridge: ${message}`);
+  return bridgeError("transport", "CB_TRANSPORT_FATAL_FRAME", `cli-providers: ${message}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ export class AgyTransport implements CliTransport {
       throw bridgeError(
         "transport",
         "CB_TRANSPORT_SPAWN_FAILED",
-        `claude-bridge: agy spawn failed: ${describe(cause)}`,
+        `cli-providers: agy spawn failed: ${describe(cause)}`,
         { cause },
       );
     }
@@ -327,20 +327,20 @@ export class AgyTransport implements CliTransport {
 
 function requireAgyConversation(session: TurnRequest["session"]): string {
   if (session === undefined) {
-    throw bridgeError("transport", "CB_TRANSPORT_PROTOCOL", "claude-bridge: no session handle to resume");
+    throw bridgeError("transport", "CB_TRANSPORT_PROTOCOL", "cli-providers: no session handle to resume");
   }
   if (session.provider !== AGY_PROVIDER_ID) {
     throw bridgeError(
       "transport",
       "CB_TRANSPORT_PROTOCOL",
-      `claude-bridge: agy transport cannot resume a "${session.provider}" session handle`,
+      `cli-providers: agy transport cannot resume a "${session.provider}" session handle`,
     );
   }
   if (typeof session.conversationRef !== "string" || session.conversationRef.length === 0) {
     throw bridgeError(
       "transport",
       "CB_TRANSPORT_PROTOCOL",
-      "claude-bridge: agy session handle has an empty conversationRef",
+      "cli-providers: agy session handle has an empty conversationRef",
     );
   }
   return session.conversationRef;
@@ -354,7 +354,7 @@ function readOutputEventName(line: string): string {
     throw bridgeError(
       "transport",
       "CB_TRANSPORT_PROTOCOL",
-      `claude-bridge: agy stdout frame is not valid JSON: ${preview(line)}`,
+      `cli-providers: agy stdout frame is not valid JSON: ${preview(line)}`,
       { cause },
     );
   }
@@ -362,7 +362,7 @@ function readOutputEventName(line: string): string {
     throw bridgeError(
       "transport",
       "CB_TRANSPORT_PROTOCOL",
-      `claude-bridge: agy stdout frame is not a JSON object: ${preview(line)}`,
+      `cli-providers: agy stdout frame is not a JSON object: ${preview(line)}`,
     );
   }
   const event = (parsed as { event?: unknown }).event;
@@ -370,7 +370,7 @@ function readOutputEventName(line: string): string {
     throw bridgeError(
       "transport",
       "CB_TRANSPORT_PROTOCOL",
-      `claude-bridge: agy stdout frame is missing its "event" discriminator: ${preview(line)}`,
+      `cli-providers: agy stdout frame is missing its "event" discriminator: ${preview(line)}`,
     );
   }
   return event;
@@ -410,7 +410,7 @@ class AgySpawnedCli implements SpawnedCli {
   async writeLine(line: string): Promise<void> {
     const stdin = this.child.stdin;
     if (stdin === null) {
-      throw bridgeError("transport", "CB_TRANSPORT_PROTOCOL", "claude-bridge: agy child has no stdin pipe");
+      throw bridgeError("transport", "CB_TRANSPORT_PROTOCOL", "cli-providers: agy child has no stdin pipe");
     }
     try {
       stdin.write(line.endsWith("\n") ? line : `${line}\n`);

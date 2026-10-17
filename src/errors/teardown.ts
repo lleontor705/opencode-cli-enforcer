@@ -36,7 +36,7 @@ export interface AbortableQuery {
 }
 
 /** Reason a parked handler's synthetic result carries. */
-export const TEARDOWN_REASON = "claude-bridge: query torn down";
+export const TEARDOWN_REASON = "cli-providers: query torn down";
 
 /**
  * Tracks the query contexts that are still live. A context left in the set after
@@ -176,7 +176,7 @@ export class TeardownLeakError extends BridgeError {
   readonly leaks: readonly string[];
 
   constructor(label: string, leaks: readonly string[]) {
-    super("stream", "CB_STREAM_MAPPING_FAILED", `claude-bridge: ${label} leaked state — ${leaks.join("; ")}`, {
+    super("stream", "CB_STREAM_MAPPING_FAILED", `cli-providers: ${label} leaked state — ${leaks.join("; ")}`, {
       details: { label, leaks: [...leaks] },
     });
     this.name = "TeardownLeakError";

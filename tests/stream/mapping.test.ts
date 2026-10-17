@@ -102,7 +102,7 @@ test("TestREQ_CB_STRM_001_sdk_events_to_lmv3_parts", () => {
   const reasoningEnd = parts.find((p) => p.type === "reasoning-end") as {
     providerMetadata?: Record<string, Record<string, unknown>>;
   };
-  assert.equal(reasoningEnd.providerMetadata?.["claude-bridge"]?.signature, "sig-123");
+  assert.equal(reasoningEnd.providerMetadata?.["claude"]?.signature, "sig-123");
 
   const toolCall = parts.find((p) => p.type === "tool-call") as {
     toolCallId: string;
@@ -272,7 +272,7 @@ test("TestREQ_CB_STRM_001_convert_merges_parallel_tool_results", () => {
   const messages: BridgeMessage[] = [
     {
       role: "assistant",
-      provider: "claude-bridge",
+      provider: "claude",
       content: [
         { type: "thinking", thinking: "plan", thinkingSignature: "sig-1" },
         { type: "toolCall", id: "toolu/A", name: "read", arguments: { path: "a" } },

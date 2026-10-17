@@ -68,7 +68,7 @@ export function categoryOfCode(code: BridgeErrorCode): BridgeErrorCategory {
   for (const category of BRIDGE_ERROR_CATEGORIES) {
     if ((BRIDGE_ERROR_CODES[category] as readonly string[]).includes(code)) return category;
   }
-  throw new Error(`claude-bridge: unknown taxonomy code ${code}`);
+  throw new Error(`cli-providers: unknown taxonomy code ${code}`);
 }
 
 export interface BridgeErrorOptions {
@@ -100,7 +100,7 @@ export class BridgeError extends Error {
     // The closed set is a runtime invariant, not just a compile-time one: a code
     // fabricated outside its category would defeat every isBridgeErrorCode check.
     if (categoryOfCode(code) !== category) {
-      throw new Error(`claude-bridge: taxonomy code ${code} does not belong to category ${category}`);
+      throw new Error(`cli-providers: taxonomy code ${code} does not belong to category ${category}`);
     }
   }
 }
@@ -159,7 +159,7 @@ export function classifyTransportError(error: unknown): BridgeError {
   return bridgeError(
     "transport",
     retryable ? "CB_TRANSPORT_TRANSIENT" : "CB_TRANSPORT_PROTOCOL",
-    `claude-bridge transport error: ${errorSignature(error)}`,
+    `cli-providers transport error: ${errorSignature(error)}`,
     { cause: error, retryable },
   );
 }

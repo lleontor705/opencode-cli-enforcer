@@ -3,7 +3,7 @@
  *
  * OpenCode requests compaction through `ctx.session.hook("compaction")`. Setting
  * `input.result` satisfies the request and makes the host skip its own model
- * call, so a claude-bridge generation is never spent on compaction.
+ * call, so a cli-providers generation is never spent on compaction.
  *
  * The summary is produced by a throwaway SDK query that shares nothing with the
  * session's parked query or the Claude Code mirror: a plain string prompt,
@@ -143,7 +143,7 @@ export async function runSummarizerLane(
 
   for await (const message of spawn({ prompt: request.prompt, options })) {
     if (request.signal?.aborted) {
-      throw bridgeError("stream", "CB_STREAM_ABORTED", "claude-bridge: compaction summarizer aborted");
+      throw bridgeError("stream", "CB_STREAM_ABORTED", "cli-providers: compaction summarizer aborted");
     }
     if (message.type === "assistant") {
       streamedText += assistantText(message);
@@ -162,13 +162,13 @@ export async function runSummarizerLane(
   }
 
   if (request.signal?.aborted) {
-    throw bridgeError("stream", "CB_STREAM_ABORTED", "claude-bridge: compaction summarizer aborted");
+    throw bridgeError("stream", "CB_STREAM_ABORTED", "cli-providers: compaction summarizer aborted");
   }
   if (failureText !== undefined) {
     throw bridgeError(
       "stream",
       "CB_STREAM_MAPPING_FAILED",
-      `claude-bridge: compaction summarizer failed: ${failureText}`,
+      `cli-providers: compaction summarizer failed: ${failureText}`,
     );
   }
 
@@ -181,7 +181,7 @@ export async function runSummarizerLane(
     throw bridgeError(
       "stream",
       "CB_STREAM_MAPPING_FAILED",
-      "claude-bridge: compaction summarizer returned empty text",
+      "cli-providers: compaction summarizer returned empty text",
     );
   }
   return { summary, tokens: tokens ?? EMPTY_TOKEN_USAGE };
@@ -344,7 +344,7 @@ export function classifyCompactionLaneError(error: unknown): BridgeError {
     return bridgeError(
       "transport",
       "CB_TRANSPORT_SPAWN_FAILED",
-      `claude-bridge: compaction summarizer could not start: ${describeError(error)}`,
+      `cli-providers: compaction summarizer could not start: ${describeError(error)}`,
       { cause: error },
     );
   }
@@ -352,7 +352,7 @@ export function classifyCompactionLaneError(error: unknown): BridgeError {
   return bridgeError(
     "stream",
     "CB_STREAM_MAPPING_FAILED",
-    `claude-bridge: compaction summarizer failed: ${describeError(error)}`,
+    `cli-providers: compaction summarizer failed: ${describeError(error)}`,
     { cause: error },
   );
 }
@@ -392,7 +392,7 @@ export interface CompactionLaneDeps {
 export type CompactionHandler = (input: SessionCompaction) => Promise<void>;
 
 function defaultFailureReporter(error: BridgeError): void {
-  console.warn(`claude-bridge: compaction summarizer failed [${error.code}] ${error.message}`);
+  console.warn(`cli-providers: compaction summarizer failed [${error.code}] ${error.message}`);
 }
 
 /**
@@ -437,7 +437,7 @@ export function createCompactionHandler(deps: CompactionLaneDeps = {}): Compacti
       input.result = {
         summary: outcome.summary,
         tokens: outcome.tokens,
-        metadata: { "claude-bridge": { compaction: "isolated-summarizer" } },
+        metadata: { "claude": { compaction: "isolated-summarizer" } },
       };
     } catch (error) {
       // Swallow by contract: an unset result lets the host run its default

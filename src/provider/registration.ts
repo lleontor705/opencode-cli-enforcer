@@ -60,7 +60,7 @@ export const LANGUAGE_MODEL_PENDING_CODE = "stream/adapter-pending";
 export function createPendingLanguageModel(model: Model.Info): LanguageModelV3 {
   const pending = (): never => {
     throw new Error(
-      `${LANGUAGE_MODEL_PENDING_CODE}: the claude-bridge LanguageModelV3 adapter lands in task cb-12`,
+      `${LANGUAGE_MODEL_PENDING_CODE}: the cli-providers LanguageModelV3 adapter lands in task cb-12`,
     );
   };
   return {
@@ -76,7 +76,7 @@ export function createPendingLanguageModel(model: Model.Info): LanguageModelV3 {
 /**
  * Register the provider + model catalog. The editor is re-runnable across
  * hot-reloads, so the `get` guard keeps the add idempotent and prevents duplicate
- * claude-bridge records from accumulating.
+ * cli-providers records from accumulating.
  */
 export function bindProviderEditor(
   ctx: ClaudeBridgeContext,

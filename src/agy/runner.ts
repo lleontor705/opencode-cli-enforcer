@@ -118,24 +118,24 @@ export function resolveRunnerEndpoint(
   const token = argv[1] ?? env[AGY_HOST_BRIDGE_TOKEN_ENV];
 
   if (urlValue === undefined || urlValue.trim().length === 0) {
-    throw new Error("claude-bridge: agy host runner requires a bridge url or OPENCODE_AGY_BRIDGE_URL");
+    throw new Error("cli-providers: agy host runner requires a bridge url or OPENCODE_AGY_BRIDGE_URL");
   }
   if (token === undefined || token.trim().length === 0) {
-    throw new Error("claude-bridge: agy host runner requires a bridge token or OPENCODE_AGY_BRIDGE_TOKEN");
+    throw new Error("cli-providers: agy host runner requires a bridge token or OPENCODE_AGY_BRIDGE_TOKEN");
   }
 
   let parsed: URL;
   try {
     parsed = new URL(urlValue);
   } catch (cause) {
-    throw new Error(`claude-bridge: agy host runner received an invalid bridge url "${urlValue}"`, { cause });
+    throw new Error(`cli-providers: agy host runner received an invalid bridge url "${urlValue}"`, { cause });
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`claude-bridge: agy host runner requires an http(s) bridge url, got "${parsed.protocol}"`);
+    throw new Error(`cli-providers: agy host runner requires an http(s) bridge url, got "${parsed.protocol}"`);
   }
   if (!isLoopbackHostname(parsed.hostname)) {
     throw new Error(
-      `claude-bridge: agy host runner refuses non-loopback bridge host "${parsed.hostname}"; host tools stay on the local machine`,
+      `cli-providers: agy host runner refuses non-loopback bridge host "${parsed.hostname}"; host tools stay on the local machine`,
     );
   }
   return { url: urlValue, token };
@@ -175,7 +175,7 @@ export async function startAgyHostBridge(options: AgyHostBridgeOptions = {}): Pr
   const address = http.address();
   if (address === null || typeof address === "string") {
     await closeHttp(http);
-    throw new Error("claude-bridge: agy host bridge failed to bind a loopback port");
+    throw new Error("cli-providers: agy host bridge failed to bind a loopback port");
   }
 
   let closed = false;
@@ -431,7 +431,7 @@ function isRunnerEntrypoint(): boolean {
 if (isRunnerEntrypoint()) {
   main().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`claude-bridge: agy host runner failed: ${message}\n`);
+    process.stderr.write(`cli-providers: agy host runner failed: ${message}\n`);
     process.exitCode = 1;
   });
 }

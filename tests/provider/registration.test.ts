@@ -181,7 +181,7 @@ describe("REQ-CB-PROV-001 provider registration and model catalog", () => {
 });
 
 describe("REQ-CB-PROV-002 language model seam attach", () => {
-  it("TestREQ_CB_PROV_002_language_model_hook is scoped by providerID claude-bridge", async () => {
+  it("TestREQ_CB_PROV_002_language_model_hook is scoped by providerID claude", async () => {
     const host = createFakeHost();
     await registerClaudeBridge(host.ctx, { registry: createProviderRegistry() });
 

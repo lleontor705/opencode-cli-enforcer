@@ -145,7 +145,7 @@ export class AgySessionStore implements SessionStore {
       throw bridgeError(
         "session-mirror",
         "CB_SESSION_MIRROR_INTEGRITY",
-        "claude-bridge: malformed agy session handle (not JSON)",
+        "cli-providers: malformed agy session handle (not JSON)",
         { cause },
       );
     }
@@ -158,7 +158,7 @@ export class AgySessionStore implements SessionStore {
       throw bridgeError(
         "session-mirror",
         "CB_SESSION_MIRROR_INTEGRITY",
-        "claude-bridge: malformed agy session handle (version/provider/ref)",
+        "cli-providers: malformed agy session handle (version/provider/ref)",
       );
     }
     return { provider: AGY_PROVIDER_ID, conversationRef: parsed.conversationRef };
@@ -204,14 +204,14 @@ export class AgySessionStore implements SessionStore {
       throw bridgeError(
         "session-mirror",
         "CB_SESSION_MIRROR_DIVERGENCE",
-        `claude-bridge: agy session handle carries foreign provider "${handle.provider}"`,
+        `cli-providers: agy session handle carries foreign provider "${handle.provider}"`,
       );
     }
     if (!isNonEmptyString(handle.conversationRef)) {
       throw bridgeError(
         "session-mirror",
         "CB_SESSION_MIRROR_INTEGRITY",
-        "claude-bridge: agy session handle has an empty conversationRef",
+        "cli-providers: agy session handle has an empty conversationRef",
       );
     }
     return handle.conversationRef;

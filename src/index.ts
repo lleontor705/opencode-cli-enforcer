@@ -80,7 +80,7 @@ function createHostNotifier(ctx: Plugin.Context): NotifyFn {
     return (message, level) => notify(message, level);
   }
   return (message, level) => {
-    console.warn(`claude-bridge: [${level}] ${message}`);
+    console.warn(`cli-providers: [${level}] ${message}`);
   };
 }
 
@@ -152,7 +152,7 @@ async function startAgyHostWiring(
  * Register the agy provider with the real Wave B bindings: cb-21 transport,
  * cb-22 mapper, cb-23 session store, cb-24 channel and cb-25 usage ledger, plus
  * the LanguageModelV3 factory that drives them. Catalog and `language` hook go
- * through the same guarded cb-05 bindings claude-bridge uses (idempotent
+ * through the same guarded cb-05 bindings cli-providers uses (idempotent
  * `editor.get` transform + providerID-scoped hook), so a hot-reload never stacks
  * a second agy registration and the disposables join the cleanup latch.
  */
@@ -258,7 +258,7 @@ function renderToolContentBlock(block: unknown): string {
 }
 
 export default Plugin.define({
-  id: "claude-bridge",
+  id: "cli-providers",
   async setup(ctx) {
     const config = resolveConfig(ctx.options);
 
@@ -313,7 +313,7 @@ export default Plugin.define({
 
     // Enabled agy also registers its provider catalog + LanguageModelV3 factory
     // (transport/mapper/store/channel/probe bindings) through the same
-    // provider.transform and providerID-scoped `language` hook claude-bridge uses.
+    // provider.transform and providerID-scoped `language` hook cli-providers uses.
     const agyRegistrations: readonly Disposable[] =
       agyWiring === null ? [] : await registerAgyBridge(ctx, agyWiring);
 
@@ -340,7 +340,7 @@ export default Plugin.define({
         }
         if (liveQueries.size !== 0) {
           throw new Error(
-            `claude-bridge: plugin cleanup left ${liveQueries.size} live query context(s)`,
+            `cli-providers: plugin cleanup left ${liveQueries.size} live query context(s)`,
           );
         }
         for (const disposable of [...disposables].reverse()) {

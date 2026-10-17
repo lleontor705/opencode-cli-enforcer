@@ -10,7 +10,7 @@
 import { Model, Provider } from "@opencode/plugin";
 
 /** OpenCode provider id owned by this plugin. */
-export const CLAUDE_BRIDGE_PROVIDER_ID = "claude-bridge";
+export const CLAUDE_BRIDGE_PROVIDER_ID = "claude";
 
 export const CLAUDE_BRIDGE_PROVIDER_NAME = "Claude Code";
 

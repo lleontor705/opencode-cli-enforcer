@@ -97,7 +97,7 @@ function compactionInput(): SessionCompaction {
   return {
     sessionID: "ses_compaction",
     agent: "build",
-    model: { providerID: "claude-bridge", modelID: "claude-sonnet-4" },
+    model: { providerID: "claude", modelID: "claude-sonnet-4" },
     system: [{ type: "text", text: "You are a coding assistant." }],
     messages: [
       { id: "m1", role: "user", content: [{ type: "text", text: "Implement the parser." }] },
@@ -137,8 +137,8 @@ test("TestREQ_CB_CMPR_001_compaction_lane_sets_result", async (t) => {
     assert.ok(input.result, "result must be set on a healthy lane");
     assert.equal(input.result.summary, "A concise summary.");
     assert.deepEqual(input.result.tokens, EXPECTED_TOKENS);
-    assert.deepEqual(input.result.metadata, { "claude-bridge": { compaction: "isolated-summarizer" } });
-    assert.equal(model.state.calls, 0, "no claude-bridge model call may happen for compaction");
+    assert.deepEqual(input.result.metadata, { "claude": { compaction: "isolated-summarizer" } });
+    assert.equal(model.state.calls, 0, "no claude model call may happen for compaction");
     assert.deepEqual(failures, []);
 
     assert.equal(calls.length, 1, "exactly one isolated lane spawn");

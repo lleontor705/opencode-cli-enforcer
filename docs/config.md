@@ -35,11 +35,11 @@ rejected. There is no implicit "first enabled provider" fallback.
 
 ## `providers.claude`
 
-The Claude Code provider (provider id `claude-bridge`).
+The Claude Code provider (provider id `claude`).
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | boolean | `true` | Register the `claude-bridge` provider and its model catalog. |
+| `enabled` | boolean | `true` | Register the `claude` provider and its model catalog. |
 | `modelOverride` | string \| null | `null` | Force a single model id for every request, instead of the model OpenCode selected from the catalog. |
 | `debugLogs` | boolean | `false` | Enable verbose bridge logging for diagnostics. |
 | `toolsAllow` | string[] \| null | `null` | Optional allowlist of host tool names the bridge will serve to Claude Code. `null` serves the full host tool set. |

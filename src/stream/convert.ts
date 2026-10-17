@@ -18,7 +18,7 @@ import type { PromptProjectionContext, SendablePromptPart } from "../errors/asse
 
 /** Provider id whose thinking signatures Claude Code will accept back. A
  *  signature minted by any other provider is not ours to replay. */
-export const PROVIDER_ID = "claude-bridge";
+export const PROVIDER_ID = "claude";
 
 export interface BridgeTextBlock {
   readonly type: "text";

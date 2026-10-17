@@ -1,6 +1,6 @@
 /**
  * Custom LanguageModelV3 adapter: the OpenCode generation surface for the
- * claude-bridge provider (REQ-CB-PROV-002, design D1/D6).
+ * claude provider (REQ-CB-PROV-002, design D1/D6).
  *
  * `registration.ts` binds a `LanguageModelFactory` into the `aisdk.hook("language")`
  * seam. This module is that factory's real implementation: it owns the per-query
@@ -369,7 +369,7 @@ class ClaudeBridgeQuery {
     if (last === undefined || last.role !== "user") return;
     const stream = this.context.promptStream;
     if (stream === null) {
-      this.fail(bridgeError("stream", "CB_STREAM_MAPPING_FAILED", "claude-bridge: no live query to prompt"));
+      this.fail(bridgeError("stream", "CB_STREAM_MAPPING_FAILED", "cli-providers: no live query to prompt"));
       return;
     }
     const text = userMessageText(last);
@@ -399,8 +399,8 @@ class ClaudeBridgeQuery {
     this.aborted = true;
 
     const spawned = this.spawned;
-    spawned?.promptStream.fail(new Error("claude-bridge: query aborted"));
-    this.scope?.releasePendingToolCalls("claude-bridge: query aborted");
+    spawned?.promptStream.fail(new Error("cli-providers: query aborted"));
+    this.scope?.releasePendingToolCalls("cli-providers: query aborted");
     if (spawned !== null) {
       void spawned.handle.interrupt().catch(() => {});
       try {
@@ -412,13 +412,13 @@ class ClaudeBridgeQuery {
 
     this.pushPart({
       type: "error",
-      error: bridgeError("stream", "CB_STREAM_ABORTED", "claude-bridge: stream aborted by abortSignal"),
+      error: bridgeError("stream", "CB_STREAM_ABORTED", "cli-providers: stream aborted by abortSignal"),
     });
     this.closeTurn();
   }
 }
 
-/** Build the custom `LanguageModelV3` registration binds for one claude-bridge model. */
+/** Build the custom `LanguageModelV3` registration binds for one claude model. */
 export function createClaudeBridgeLanguageModel(
   model: Model.Info,
   config: ClaudeBridgeLanguageModelConfig = {},
@@ -450,7 +450,7 @@ function abortedStream(): ReadableStream<LanguageModelV3StreamPart> {
     start(controller) {
       controller.enqueue({
         type: "error",
-        error: bridgeError("stream", "CB_STREAM_ABORTED", "claude-bridge: request aborted before streaming"),
+        error: bridgeError("stream", "CB_STREAM_ABORTED", "cli-providers: request aborted before streaming"),
       });
       controller.close();
     },

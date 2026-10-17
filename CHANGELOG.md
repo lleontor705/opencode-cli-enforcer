@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Renamed the plugin id to `cli-providers` and the Claude provider id to `claude`.** The plugin now
+  registers via `Plugin.define({ id: "cli-providers" })`, and the Claude Code provider is published
+  as `claude` (previously `claude-bridge`), so models are referenced as `claude/claude-sonnet-5`.
+  This is a breaking change for saved `claude-bridge/<model>` references: update them to
+  `claude/<model>`. Diagnostic messages now use the `cli-providers:` prefix and the stream
+  provider-metadata key is `claude`; the `CLAUDE_BRIDGE_INTEGRATION` CI gate, the `AGY_BRIDGE_*`
+  gates, and the internal `ClaudeBridge*` symbols are unchanged.
+
 ## [2.0.1] - 2026-10-16
 
 ### Changed

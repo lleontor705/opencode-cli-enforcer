@@ -90,7 +90,7 @@ test("TestREQ_CB_ERR_001_abort_teardown_no_leaks", async () => {
     context,
     rendezvous,
     liveQueries: live,
-    reason: "claude-bridge: aborted",
+    reason: "cli-providers: aborted",
   });
 
   // Every ack settles — the in-flight one and the queued one — rather than hanging.
@@ -100,7 +100,7 @@ test("TestREQ_CB_ERR_001_abort_teardown_no_leaks", async () => {
   // The parked handler is resolved with a text error result, never rejected.
   const released = await withDeadline(parked);
   assert.equal(released.isError, true);
-  assert.equal(released.content[0]?.text, "claude-bridge: aborted");
+  assert.equal(released.content[0]?.text, "cli-providers: aborted");
 
   assert.equal(outcome.queryAborted, true);
   assert.equal(outcome.promptStreamFailed, true);
@@ -148,7 +148,7 @@ test("TestREQ_CB_ERR_001_normal_completion_no_leaks", async () => {
     context,
     rendezvous,
     liveQueries: live,
-    reason: "claude-bridge: turn complete",
+    reason: "cli-providers: turn complete",
   });
 
   assert.deepEqual(seen, ["turn one"]);

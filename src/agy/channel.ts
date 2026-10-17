@@ -122,7 +122,7 @@ async function runAgyMcpAdd(command: string, request: AgyMcpRegistrationRequest)
         bridgeError(
           "transport",
           "CB_TRANSPORT_SPAWN_FAILED",
-          `claude-bridge: agy mcp add failed to spawn: ${cause.message}`,
+          `cli-providers: agy mcp add failed to spawn: ${cause.message}`,
           { cause },
         ),
       );
@@ -137,7 +137,7 @@ async function runAgyMcpAdd(command: string, request: AgyMcpRegistrationRequest)
         bridgeError(
           "transport",
           "CB_TRANSPORT_PROTOCOL",
-          `claude-bridge: agy mcp add exited ${code}${detail.length > 0 ? `: ${detail}` : ""}`,
+          `cli-providers: agy mcp add exited ${code}${detail.length > 0 ? `: ${detail}` : ""}`,
         ),
       );
     });
@@ -240,7 +240,7 @@ export class AgySteeringPolicy implements SteeringPolicy {
       throw bridgeError(
         "stream",
         "CB_STREAM_UNSENDABLE_PROMPT",
-        "claude-bridge: agy steer must not be empty",
+        "cli-providers: agy steer must not be empty",
       );
     }
     this.queue.push(text);
@@ -302,7 +302,7 @@ export class AgyToolChannel implements ToolChannel {
       throw bridgeError(
         "tool",
         "CB_TOOL_UNKNOWN",
-        "claude-bridge: agy tool channel has no manifest; call registerHostTools first",
+        "cli-providers: agy tool channel has no manifest; call registerHostTools first",
       );
     }
     return this.manifestValue;
@@ -322,7 +322,7 @@ export class AgyToolChannel implements ToolChannel {
         throw bridgeError(
           "tool",
           "CB_TOOL_UNKNOWN",
-          `claude-bridge: agy executes "${tool.descriptor.name}" inline from tools/call arguments; the Claude tool_use rendezvous is not used`,
+          `cli-providers: agy executes "${tool.descriptor.name}" inline from tools/call arguments; the Claude tool_use rendezvous is not used`,
         );
       },
     }));
@@ -331,11 +331,11 @@ export class AgyToolChannel implements ToolChannel {
     server.instance.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const name = request.params.name;
       const tool = byName.get(name);
-      if (tool === undefined) return toCallToolResult(errorResult(`claude-bridge: agy called unknown tool "${name}"`));
+      if (tool === undefined) return toCallToolResult(errorResult(`cli-providers: agy called unknown tool "${name}"`));
       if (!this.permission.toolAllowed(name)) {
         return toCallToolResult(
           errorResult(
-            `claude-bridge: agy tool "${name}" denied — not in the declarative allow rules and no ${AGY_PERMISSION_BYPASS_FLAG} consent`,
+            `cli-providers: agy tool "${name}" denied — not in the declarative allow rules and no ${AGY_PERMISSION_BYPASS_FLAG} consent`,
           ),
         );
       }
@@ -367,7 +367,7 @@ export class AgyToolChannel implements ToolChannel {
       throw bridgeError(
         "tool",
         "CB_TOOL_UNKNOWN",
-        "claude-bridge: agy tool channel has no server; call registerHostTools first",
+        "cli-providers: agy tool channel has no server; call registerHostTools first",
       );
     }
     return this.server.instance.connect(transport);
@@ -379,7 +379,7 @@ export class AgyToolChannel implements ToolChannel {
         throw bridgeError(
           "config",
           "CB_CONFIG_INVALID_OPTIONS",
-          "claude-bridge: allowUserLevelRegistration requires a runnerCommand so agy can spawn the MCP server",
+          "cli-providers: allowUserLevelRegistration requires a runnerCommand so agy can spawn the MCP server",
         );
       }
       await this.registrar.register({
@@ -436,7 +436,7 @@ function toCallToolResult(result: ToolResult): { content: ToolTextContent[]; isE
 function requireNonEmpty(value: string, label: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
-    throw bridgeError("config", "CB_CONFIG_INVALID_OPTIONS", `claude-bridge: ${label} must be non-empty`);
+    throw bridgeError("config", "CB_CONFIG_INVALID_OPTIONS", `cli-providers: ${label} must be non-empty`);
   }
   return trimmed;
 }
