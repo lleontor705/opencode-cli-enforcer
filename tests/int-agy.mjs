@@ -41,7 +41,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
-const RUNNER_ENTRY = join(ROOT, "src", "agy", "runner.ts");
+const RUNNER_ENTRY = join(ROOT, "src", "agy", "runner-cli.mjs");
 
 // ---------------------------------------------------------------------------
 // Environment gate: probe agy before any tier decision.
@@ -325,7 +325,7 @@ test(
   async (t) => {
     const channel = new AgyToolChannel({
       permission: new AgyPermissionPolicy({ allowToolNames: ["read"] }),
-      runnerCommand: [process.execPath, "--import", "tsx", RUNNER_ENTRY],
+      runnerCommand: [process.execPath, RUNNER_ENTRY],
     });
     await channel.registerHostTools([
       hostTool("read", READ_SCHEMA, async (input) => ({ content: `read:${input.path}` })),
@@ -340,7 +340,7 @@ test(
 
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: ["--import", "tsx", RUNNER_ENTRY, bridge.url, bridge.token],
+      args: [RUNNER_ENTRY, bridge.url, bridge.token],
       env: inheritedEnv(),
       stderr: "pipe",
     });

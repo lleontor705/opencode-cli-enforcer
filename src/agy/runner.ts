@@ -43,31 +43,31 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server as HttpServer, ServerResponse } from "node:http";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  type CallToolResult,
-  type ListToolsResult,
-} from "@modelcontextprotocol/sdk/types.js";
 
-export const AGY_HOST_BRIDGE_DEFAULT_NAME = "opencode-host-bridge";
+import { AGY_HOST_BRIDGE_DEFAULT_NAME } from "./runner-cli.mjs";
+
+export {
+  AGY_HOST_BRIDGE_DEFAULT_NAME,
+  AGY_HOST_BRIDGE_TOKEN_ENV,
+  AGY_HOST_BRIDGE_URL_ENV,
+  createRunnerServer,
+  isLoopbackHostname,
+  main,
+  resolveRunnerEndpoint,
+  type AgyRunnerEndpoint,
+  type RunnerEndpoint,
+} from "./runner-cli.mjs";
+
 export const AGY_HOST_BRIDGE_LOOPBACK_HOST = "127.0.0.1";
-export const AGY_HOST_BRIDGE_URL_ENV = "OPENCODE_AGY_BRIDGE_URL";
-export const AGY_HOST_BRIDGE_TOKEN_ENV = "OPENCODE_AGY_BRIDGE_TOKEN";
 
 const TOOLS_LIST_ROUTE = "/tools/list";
 const TOOLS_CALL_ROUTE = "/tools/call";
 const BEARER_PREFIX = "Bearer ";
 const DEFAULT_REQUEST_LIMIT_BYTES = 8 * 1024 * 1024;
-const BRIDGE_TIMEOUT_MS = 30_000;
 
 /** The plugin-side server surface the bridge attaches to (structurally `ToolChannel` + `connect`). */
 export interface McpServerConnector {
@@ -88,57 +88,6 @@ export interface AgyHostBridge {
 export interface AgyHostBridgeOptions {
   readonly serverName?: string;
   readonly requestLimitBytes?: number;
-}
-
-/** The endpoint the standalone runner forwards to. */
-export interface AgyRunnerEndpoint {
-  readonly url: string;
-  readonly token: string;
-}
-
-/**
- * True for hostnames that can only ever name the local machine. `localhost` is
- * included for operator ergonomics; the plugin always binds `127.0.0.1`.
- */
-export function isLoopbackHostname(hostname: string): boolean {
-  const host = hostname.trim().replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
-  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0:0:0:0:0:0:0:1";
-}
-
-/**
- * Resolve and validate the bridge endpoint from positional argv (`<url> <token>`)
- * with an environment fallback. A non-loopback host or missing token fails loud:
- * the runner must never forward host-tool calls to a remote endpoint.
- */
-export function resolveRunnerEndpoint(
-  argv: readonly string[],
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): AgyRunnerEndpoint {
-  const urlValue = argv[0] ?? env[AGY_HOST_BRIDGE_URL_ENV];
-  const token = argv[1] ?? env[AGY_HOST_BRIDGE_TOKEN_ENV];
-
-  if (urlValue === undefined || urlValue.trim().length === 0) {
-    throw new Error("cli-providers: agy host runner requires a bridge url or OPENCODE_AGY_BRIDGE_URL");
-  }
-  if (token === undefined || token.trim().length === 0) {
-    throw new Error("cli-providers: agy host runner requires a bridge token or OPENCODE_AGY_BRIDGE_TOKEN");
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(urlValue);
-  } catch (cause) {
-    throw new Error(`cli-providers: agy host runner received an invalid bridge url "${urlValue}"`, { cause });
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(`cli-providers: agy host runner requires an http(s) bridge url, got "${parsed.protocol}"`);
-  }
-  if (!isLoopbackHostname(parsed.hostname)) {
-    throw new Error(
-      `cli-providers: agy host runner refuses non-loopback bridge host "${parsed.hostname}"; host tools stay on the local machine`,
-    );
-  }
-  return { url: urlValue, token };
 }
 
 /**
@@ -247,93 +196,6 @@ async function handleBridgeRequest(
 }
 
 // ---------------------------------------------------------------------------
-// Runner (agy-spawned stdio endpoint)
-// ---------------------------------------------------------------------------
-
-/** Build the stdio MCP server that forwards list/call to the bridge. */
-export function createRunnerServer(endpoint: AgyRunnerEndpoint): Server {
-  const server = new Server(
-    { name: AGY_HOST_BRIDGE_DEFAULT_NAME, version: "1.0.0" },
-    { capabilities: { tools: {} } },
-  );
-
-  server.setRequestHandler(ListToolsRequestSchema, async (): Promise<ListToolsResult> => {
-    const tools = await forwardListTools(endpoint);
-    return { tools: tools as ListToolsResult["tools"] };
-  });
-
-  server.setRequestHandler(CallToolRequestSchema, (request): Promise<CallToolResult> =>
-    forwardCallTool(endpoint, request.params),
-  );
-
-  return server;
-}
-
-/**
- * Standalone entry: resolve the loopback endpoint, then serve MCP over stdio.
- * Never returns until the transport closes.
- */
-export async function main(
-  argv: readonly string[] = process.argv.slice(2),
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): Promise<void> {
-  const endpoint = resolveRunnerEndpoint(argv, env);
-  await createRunnerServer(endpoint).connect(new StdioServerTransport());
-}
-
-async function forwardListTools(endpoint: AgyRunnerEndpoint): Promise<unknown[]> {
-  const response = await postJson(endpoint, TOOLS_LIST_ROUTE, {});
-  const body = (await response.json()) as { tools?: unknown; error?: unknown };
-  if (!response.ok) throw new Error(readBridgeError(body, response.status));
-  return Array.isArray(body.tools) ? body.tools : [];
-}
-
-/**
- * A failed or unreachable bridge returns an `isError` MCP result instead of
- * throwing: agy's `tools/call` is already in flight and an error response it
- * understands keeps the turn alive (no hang).
- */
-async function forwardCallTool(
-  endpoint: AgyRunnerEndpoint,
-  params: { readonly name: string; readonly arguments?: Record<string, unknown> },
-): Promise<CallToolResult> {
-  try {
-    const response = await postJson(endpoint, TOOLS_CALL_ROUTE, {
-      name: params.name,
-      arguments: params.arguments ?? {},
-    });
-    const body = (await response.json()) as { content?: unknown; isError?: unknown; error?: unknown };
-    if (!response.ok) return errorResult(readBridgeError(body, response.status));
-    return {
-      content: (Array.isArray(body.content) ? body.content : []) as CallToolResult["content"],
-      isError: body.isError === true,
-    };
-  } catch (error) {
-    return errorResult(error instanceof Error ? error.message : String(error));
-  }
-}
-
-function errorResult(message: string): CallToolResult {
-  return { content: [{ type: "text", text: message }], isError: true };
-}
-
-function readBridgeError(body: { error?: unknown }, status: number): string {
-  return typeof body.error === "string" ? body.error : `agy host bridge returned HTTP ${status}`;
-}
-
-async function postJson(endpoint: AgyRunnerEndpoint, route: string, body: unknown): Promise<Response> {
-  return fetch(`${endpoint.url}${route}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `${BEARER_PREFIX}${endpoint.token}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(BRIDGE_TIMEOUT_MS),
-  });
-}
-
-// ---------------------------------------------------------------------------
 // HTTP plumbing
 // ---------------------------------------------------------------------------
 
@@ -409,29 +271,4 @@ function closeHttp(server: HttpServer): Promise<void> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-// ---------------------------------------------------------------------------
-// Direct entry
-// ---------------------------------------------------------------------------
-
-/**
- * True when this module is the process entrypoint (agy spawns `runner.ts`
- * directly). Importing it from the plugin or a test must never serve stdio, so
- * the check compares the real argv[1] against this module's own resolved path.
- */
-function isRunnerEntrypoint(): boolean {
-  const entry = process.argv[1];
-  if (entry === undefined) return false;
-  const self = fileURLToPath(import.meta.url);
-  const resolved = path.resolve(entry);
-  return resolved === self || resolved === self.replace(/\.ts$/, ".js");
-}
-
-if (isRunnerEntrypoint()) {
-  main().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`cli-providers: agy host runner failed: ${message}\n`);
-    process.exitCode = 1;
-  });
 }

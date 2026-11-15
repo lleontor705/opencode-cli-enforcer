@@ -89,7 +89,27 @@ function createHostNotifier(ctx: Plugin.Context): NotifyFn {
 // ---------------------------------------------------------------------------
 
 /** The runner entrypoint agy spawns; resolved next to this plugin module. */
-const AGY_RUNNER_ENTRY = fileURLToPath(new URL("./agy/runner.ts", import.meta.url));
+export const AGY_RUNNER_ENTRY = fileURLToPath(new URL("./agy/runner-cli.mjs", import.meta.url));
+
+/** Build the stdio runner command without `tsx` (Bun `BUN_BE_BUN=1` on POSIX, or Node). */
+export function buildAgyRunnerCommand(
+  bridgeUrl: string,
+  bridgeToken: string,
+  runtime?: {
+    readonly execPath?: string;
+    readonly isBun?: boolean;
+    readonly platform?: NodeJS.Platform;
+  },
+): readonly string[] {
+  const execPath = runtime?.execPath ?? process.execPath;
+  const isBun = runtime?.isBun ?? typeof process.versions.bun === "string";
+  const platform = runtime?.platform ?? process.platform;
+  if (isBun && platform !== "win32") {
+    return ["/usr/bin/env", "BUN_BE_BUN=1", execPath, AGY_RUNNER_ENTRY, bridgeUrl, bridgeToken];
+  }
+  const bin = isBun ? "node" : execPath;
+  return [bin, AGY_RUNNER_ENTRY, bridgeUrl, bridgeToken];
+}
 
 type RegisteredHostTool = Awaited<ReturnType<Plugin.Context["tool"]["list"]>>[number];
 type RegisteredHostToolContext = Parameters<RegisteredHostTool["execute"]>[1];
@@ -117,14 +137,7 @@ async function startAgyHostWiring(
   agy: ResolvedAgyConfig,
 ): Promise<AgyHostWiring> {
   const bridge = await startAgyHostBridge();
-  const runnerCommand = [
-    process.execPath,
-    "--import",
-    "tsx",
-    AGY_RUNNER_ENTRY,
-    bridge.url,
-    bridge.token,
-  ];
+  const runnerCommand = buildAgyRunnerCommand(bridge.url, bridge.token);
 
   const channel = new AgyToolChannel({
     permission: new AgyPermissionPolicy({

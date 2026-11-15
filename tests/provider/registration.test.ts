@@ -127,7 +127,10 @@ describe("REQ-CB-PROV-001 provider registration and model catalog", () => {
     assert.ok(record);
     assert.equal(record.provider.name, "Claude Code");
     assert.equal(record.provider.activation, "auto");
-    assert.equal(record.provider.package, "@anthropic-ai/claude-agent-sdk");
+    assert.equal(
+      record.provider.package,
+      `aisdk:${new URL("../../src/provider/provider-package.mjs", import.meta.url).href}`,
+    );
     assert.ok(record.models.length >= 1);
 
     for (const model of record.models) {

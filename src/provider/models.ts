@@ -146,7 +146,7 @@ export function claudeBridgeProviderInfo(): Provider.Info {
   return {
     ...Provider.Info.empty(CLAUDE_BRIDGE_PROVIDER_ID_BRAND),
     name: CLAUDE_BRIDGE_PROVIDER_NAME,
-    package: "@anthropic-ai/claude-agent-sdk",
+    package: `aisdk:${new URL("./provider-package.mjs", import.meta.url).href}`,
   };
 }
 
