@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-11-14
+
+### Fixed
+
+- **Plain-ESM `provider-package.mjs` shims for `agy` and `claude` under OpenCode v2.** Stripped
+  TypeScript annotations from `src/agy/provider-package.mjs` so OpenCode v2's embedded Bun JS
+  loader (`loader: "js"`) parses the shim without syntax errors, and added the matching plain-ESM
+  `aisdk:` shim (`src/provider/provider-package.mjs`) to `claudeBridgeProviderInfo()` in
+  `src/provider/models.ts` so OpenCode v2 routes `claude/*` models through `AISDK.language` and
+  invokes `ctx.aisdk.hook("language", ...)`.
+- **Standalone plain-ESM `agy` MCP host-tool runner (`src/agy/runner-cli.mjs`).** Extracted the
+  `agy` stdio MCP runner out of `src/agy/runner.ts` into a dependency-minimal plain-ESM entrypoint
+  and added `buildAgyRunnerCommand` in `src/index.ts`, removing the runtime `--import tsx`
+  requirement so host tools execute under OpenCode v2's compiled Bun binary (`BUN_BE_BUN=1` on
+  POSIX) and bare Node.js without `devDependencies` or `node_modules/` type-stripping.
+
 ## [3.1.0] - 2026-10-17
 
 ### Added
