@@ -3,6 +3,9 @@ import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 export declare const AGY_HOST_BRIDGE_DEFAULT_NAME = "opencode-host-bridge";
 export declare const AGY_HOST_BRIDGE_URL_ENV = "OPENCODE_AGY_BRIDGE_URL";
 export declare const AGY_HOST_BRIDGE_TOKEN_ENV = "OPENCODE_AGY_BRIDGE_TOKEN";
+export declare const TOOLS_LIST_ROUTE = "/tools/list";
+export declare const TOOLS_CALL_ROUTE = "/tools/call";
+export declare const BEARER_PREFIX = "Bearer ";
 
 export interface AgyRunnerEndpoint {
   readonly url: string;

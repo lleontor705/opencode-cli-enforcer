@@ -134,7 +134,8 @@ jobs:
       - name: Publish with provenance
         run: npm publish --provenance
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Empty in OIDC mode: a stale token would shadow the trusted-publishing identity.
+          NODE_AUTH_TOKEN: ${{ vars.NPM_TRUSTED_PUBLISHING != '1' && secrets.NPM_TOKEN || '' }}
 
   github-release:
     name: GitHub release (attach SBOM)

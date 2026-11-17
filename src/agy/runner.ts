@@ -48,7 +48,12 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
-import { AGY_HOST_BRIDGE_DEFAULT_NAME } from "./runner-cli.mjs";
+import {
+  AGY_HOST_BRIDGE_DEFAULT_NAME,
+  BEARER_PREFIX,
+  TOOLS_CALL_ROUTE,
+  TOOLS_LIST_ROUTE,
+} from "./runner-cli.mjs";
 
 export {
   AGY_HOST_BRIDGE_DEFAULT_NAME,
@@ -64,9 +69,6 @@ export {
 
 export const AGY_HOST_BRIDGE_LOOPBACK_HOST = "127.0.0.1";
 
-const TOOLS_LIST_ROUTE = "/tools/list";
-const TOOLS_CALL_ROUTE = "/tools/call";
-const BEARER_PREFIX = "Bearer ";
 const DEFAULT_REQUEST_LIMIT_BYTES = 8 * 1024 * 1024;
 
 /** The plugin-side server surface the bridge attaches to (structurally `ToolChannel` + `connect`). */

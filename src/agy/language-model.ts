@@ -196,10 +196,21 @@ class AgyTurn {
         event: "user",
         message: { content: agyPromptText(options.prompt) },
       });
+      // agy stream-json is a REPL: after `result` it waits for another `user`
+      // frame or stdin EOF. One frame per spawn, so EOF lets it exit cleanly and
+      // persist the conversation for `--conversation` resume.
+      try {
+        await cli.endInput();
+      } catch {
+        // Best-effort: the `result` break below still ends the turn.
+      }
 
       for await (const line of this.transport.readLines(cli)) {
         if (this.settled) break;
-        this.consume(parseAgyLine(line));
+        const raw = parseAgyLine(line);
+        this.consume(raw);
+        // Backstop for a child that keeps stdout open after its terminal frame.
+        if (raw.event === "result") break;
       }
       // A child that dies before emitting a single frame (unauthenticated agy,
       // expired token, fatal frame) must not close an empty silent stream:

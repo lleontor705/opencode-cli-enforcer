@@ -16,9 +16,9 @@ import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import * as agyProviderPackage from "../src/agy/provider-package.mjs";
+import * as agyProviderPackage from "../../src/agy/provider-package.mjs";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC_DIR = path.join(ROOT, "src");
 
 const DUMMY_SDK_MESSAGE =

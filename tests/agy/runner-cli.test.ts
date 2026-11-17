@@ -7,21 +7,26 @@
  *     (`BUN_BE_BUN=1`), and Bun on Windows (`node` fallback).
  *  2. Live MCP stdio round-trip (`tools/list` + `tools/call`) spawning
  *     `src/agy/runner-cli.mjs` under bare `node` (`NODE_OPTIONS=""`, no `tsx`).
- *  3. Live MCP stdio round-trip under the compiled OpenCode v2 binary
- *     (`/opt/homebrew/Cellar/opencode-v2/2.3.0/bin/opencode`) when present.
+ *  3. Live MCP stdio round-trip under the OpenCode v2 binary (`OPENCODE_BIN`
+ *     or `opencode` on PATH) and under plain `bun`, each skipped when absent.
+ *  4. A non-JSON bridge error body surfaces its HTTP status, not a SyntaxError.
  */
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { AgyPermissionPolicy, AgyToolChannel } from "../../src/agy/channel.js";
-import { startAgyHostBridge, type AgyHostBridge } from "../../src/agy/runner.js";
+import { createRunnerServer, startAgyHostBridge, type AgyHostBridge } from "../../src/agy/runner.js";
 import { AGY_RUNNER_ENTRY, buildAgyRunnerCommand } from "../../src/index.js";
 import type { HostTool } from "../../src/provider/seams.js";
 
@@ -34,7 +39,17 @@ const EXPECTED_RUNNER_PATH = path.resolve(
   "runner-cli.mjs",
 );
 
-const OPENCODE_V2_BIN = "/opt/homebrew/Cellar/opencode-v2/2.3.0/bin/opencode";
+const OPENCODE_FIXTURE_BIN = "/opt/opencode/bin/opencode";
+
+function resolveBinary(name: string, override?: string): string | null {
+  if (override !== undefined && override.length > 0) return existsSync(override) ? override : null;
+  const probe = spawnSync("sh", ["-c", `command -v ${name}`], { encoding: "utf8" });
+  const found = probe.status === 0 ? probe.stdout.trim() : "";
+  return found.length > 0 ? found : null;
+}
+
+const OPENCODE_BIN = resolveBinary("opencode", process.env.OPENCODE_BIN);
+const BUN_BIN = resolveBinary("bun");
 
 const ECHO_SCHEMA = {
   type: "object",
@@ -127,14 +142,14 @@ describe("buildAgyRunnerCommand runtime dispatch", () => {
   it("wraps compiled Bun/OpenCode binary with /usr/bin/env BUN_BE_BUN=1 on POSIX", () => {
     for (const platform of ["darwin", "linux"] as const) {
       const cmd = buildAgyRunnerCommand(url, token, {
-        execPath: OPENCODE_V2_BIN,
+        execPath: OPENCODE_FIXTURE_BIN,
         isBun: true,
         platform,
       });
       assert.deepEqual(cmd, [
         "/usr/bin/env",
         "BUN_BE_BUN=1",
-        OPENCODE_V2_BIN,
+        OPENCODE_FIXTURE_BIN,
         AGY_RUNNER_ENTRY,
         url,
         token,
@@ -166,24 +181,51 @@ describe("runner-cli.mjs live MCP stdio round-trip", () => {
     await verifyRoundTrip(command, args);
   });
 
-  it(
-    "serves tools/list and tools/call under OpenCode v2 binary (BUN_BE_BUN=1)",
-    {
-      skip: !existsSync(OPENCODE_V2_BIN) ? `${OPENCODE_V2_BIN} not installed on this host` : false,
-      timeout: 20_000,
-    },
-    async (t) => {
-      const bridge = await startTestBridge();
-      t.after(() => bridge.close());
+  for (const [label, bin] of [
+    ["OpenCode v2 binary (BUN_BE_BUN=1)", OPENCODE_BIN],
+    ["plain bun", BUN_BIN],
+  ] as const) {
+    it(
+      `serves tools/list and tools/call under ${label}`,
+      { skip: bin === null ? `${label} not found (OPENCODE_BIN / PATH)` : false, timeout: 20_000 },
+      async (t) => {
+        const bridge = await startTestBridge();
+        t.after(() => bridge.close());
 
-      const [command, ...args] = buildAgyRunnerCommand(bridge.url, bridge.token, {
-        execPath: OPENCODE_V2_BIN,
-        isBun: true,
-        platform: process.platform,
-      });
-      assert.equal(command, "/usr/bin/env");
-      assert.equal(args[1], OPENCODE_V2_BIN);
-      await verifyRoundTrip(command, args);
-    },
-  );
+        const [command, ...args] = buildAgyRunnerCommand(bridge.url, bridge.token, {
+          execPath: bin!,
+          isBun: true,
+          platform: process.platform,
+        });
+        assert.ok(command);
+        if (process.platform !== "win32") assert.equal(args[1], bin);
+        await verifyRoundTrip(command, args);
+      },
+    );
+  }
+});
+
+describe("runner-cli.mjs bridge error bodies", () => {
+  it("reports HTTP status for a non-JSON 502 instead of a JSON SyntaxError", async (t) => {
+    const http = createServer((_req, res) => {
+      res.writeHead(502, { "content-type": "text/plain" });
+      res.end("Bad Gateway");
+    });
+    await new Promise<void>((resolve) => http.listen(0, "127.0.0.1", resolve));
+    t.after(() => new Promise<void>((resolve) => http.close(() => resolve())));
+    const { port } = http.address() as AddressInfo;
+
+    const server = createRunnerServer({ url: `http://127.0.0.1:${port}`, token: "t" });
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverSide);
+    const client = new Client({ name: "runner-cli-502", version: "1.0.0" });
+    await client.connect(clientSide);
+    t.after(() => client.close());
+
+    await assert.rejects(client.listTools(), /agy host bridge returned HTTP 502/);
+    const called = await client.callTool({ name: "echo", arguments: { text: "x" } });
+    assert.equal(called.isError, true);
+    const blocks = called.content as Array<{ type: string; text: string }>;
+    assert.equal(blocks[0]?.text, "agy host bridge returned HTTP 502");
+  });
 });

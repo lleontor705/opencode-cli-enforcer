@@ -12,9 +12,9 @@ export const AGY_HOST_BRIDGE_DEFAULT_NAME = "opencode-host-bridge";
 export const AGY_HOST_BRIDGE_URL_ENV = "OPENCODE_AGY_BRIDGE_URL";
 export const AGY_HOST_BRIDGE_TOKEN_ENV = "OPENCODE_AGY_BRIDGE_TOKEN";
 
-const TOOLS_LIST_ROUTE = "/tools/list";
-const TOOLS_CALL_ROUTE = "/tools/call";
-const BEARER_PREFIX = "Bearer ";
+export const TOOLS_LIST_ROUTE = "/tools/list";
+export const TOOLS_CALL_ROUTE = "/tools/call";
+export const BEARER_PREFIX = "Bearer ";
 const BRIDGE_TIMEOUT_MS = 30_000;
 
 export function isLoopbackHostname(hostname) {
@@ -69,9 +69,9 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
 
 async function forwardListTools(endpoint) {
   const response = await postJson(endpoint, TOOLS_LIST_ROUTE, {});
-  const body = await response.json();
+  const body = await readJsonBody(response);
   if (!response.ok) throw new Error(readBridgeError(body, response.status));
-  return Array.isArray(body.tools) ? body.tools : [];
+  return body !== null && Array.isArray(body.tools) ? body.tools : [];
 }
 
 async function forwardCallTool(endpoint, params) {
@@ -80,8 +80,9 @@ async function forwardCallTool(endpoint, params) {
       name: params.name,
       arguments: params.arguments ?? {},
     });
-    const body = await response.json();
+    const body = await readJsonBody(response);
     if (!response.ok) return errorResult(readBridgeError(body, response.status));
+    if (body === null) return errorResult("agy host bridge returned a non-JSON response");
     return {
       content: Array.isArray(body.content) ? body.content : [],
       isError: body.isError === true,
@@ -93,6 +94,18 @@ async function forwardCallTool(endpoint, params) {
 
 function errorResult(message) {
   return { content: [{ type: "text", text: message }], isError: true };
+}
+
+// Error bodies from proxies or crashed bridges may not be JSON; the status must
+// still surface instead of an opaque SyntaxError.
+async function readJsonBody(response) {
+  const text = await response.text();
+  try {
+    const parsed = JSON.parse(text);
+    return parsed !== null && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function readBridgeError(body, status) {

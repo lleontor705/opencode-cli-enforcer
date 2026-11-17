@@ -228,3 +228,13 @@ test("TestREQ_CB_DOC_003_publish_is_serialized_and_every_job_is_bounded", () => 
     "each stage must keep its documented timeout budget",
   );
 });
+
+test("TestREQ_CB_DOC_003_publish_token_is_unset_in_oidc_mode", () => {
+  const step = stepsOf(jobs.publish!).find((s) => /npm\s+publish/.test(String(s.run ?? "")));
+  const token = String((step?.env as Record<string, unknown> | undefined)?.NODE_AUTH_TOKEN ?? "");
+  assert.match(
+    token.replace(/\s+/g, " "),
+    /^\$\{\{ vars\.NPM_TRUSTED_PUBLISHING != '1' && secrets\.NPM_TOKEN \|\| '' \}\}$/,
+    "NODE_AUTH_TOKEN must be empty under trusted publishing so a stale token cannot shadow OIDC",
+  );
+});
