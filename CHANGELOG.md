@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-11-17
+
+### Fixed
+
+- **`agy` turns no longer hang for 330 s after `result`.** `agy` in `stream-json` mode is a REPL
+  that keeps stdout open after its terminal frame. The adapter now closes stdin right after the
+  single `user` frame (best-effort), so `agy` exits cleanly and persists the conversation for
+  `--conversation` resume, and stops reading at the `result` frame as a backstop.
+- **The plain-ESM `.mjs` guard now runs in `npm test`, CI and release.** The unquoted
+  `tests/**/*.test.ts` glob has no `globstar` under `sh`, so it only reaches `tests/<dir>/`. The
+  guard moved to `tests/agy/provider-package-esm.test.ts`, and the new
+  `tests/ci/test-glob-coverage.test.ts` fails when a suite escapes the glob or a runner drifts.
+- **Release publish no longer passes `NPM_TOKEN` in OIDC mode.** `NODE_AUTH_TOKEN` is empty when
+  `vars.NPM_TRUSTED_PUBLISHING == '1'`, so a stale token cannot shadow trusted publishing.
+- **`runner-cli.mjs` reports `agy host bridge returned HTTP <status>` for non-JSON error bodies**
+  (e.g. a proxy 502) instead of an opaque JSON `SyntaxError`.
+
+### Changed
+
+- `TOOLS_LIST_ROUTE`, `TOOLS_CALL_ROUTE` and `BEARER_PREFIX` are exported from
+  `src/agy/runner-cli.mjs` and reused by `src/agy/runner.ts`, so client and bridge cannot drift.
+- CI gains a `bun-runtime` job (`oven-sh/setup-bun`, SHA-pinned) that runs the `.mjs` guard and
+  the runner suite under Bun. The OpenCode round-trip resolves `OPENCODE_BIN` or `opencode` on
+  `PATH` instead of a hardcoded Homebrew path, and a plain `bun` round-trip was added.
+
 ## [3.1.1] - 2026-11-14
 
 ### Fixed
